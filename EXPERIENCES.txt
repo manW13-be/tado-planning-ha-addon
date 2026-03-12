@@ -1,0 +1,23 @@
+## Problèmes rencontrés
+
+### PyTado 0.19 — changements d'API
+
+La version 0.19 a introduit un nouveau flux d'authentification OAuth2 device flow, cassant la compatibilité avec l'ancien code.
+
+**Comparaison d'enum** — `device_activation_status()` retourne désormais un objet enum `DeviceActivationStatus` et non une string. La comparaison `status == "COMPLETED"` échouait silencieusement et le script appelait `device_activation()` même quand le token était déjà valide, déclenchant une nouvelle demande d'auth à chaque exécution. Fix : `status.value == "COMPLETED"`.
+
+**URL d'authentification incomplète** — `device_verification_url()` génère une URL construite comme `verification_uri + user_code` au lieu d'utiliser `verification_uri_complete`. L'URL affichée à l'utilisateur manquait le `client_id` et retournait une erreur Tado `missing_client_id`. En réalité le `client_id` est envoyé correctement dans les requêtes API en arrière-plan — c'est uniquement l'URL affichée qui est mal formée. Workaround : lire `_device_flow_data['verification_uri_complete']` directement.
+
+**Format du token** — `get_refresh_token()` retourne une string brute, mais `_load_token()` attend un fichier JSON avec la clé `refresh_token`. Sauvegarder le token avec `json.dump({'refresh_token': token}, f)` plutôt qu'en texte brut.
+
+---
+
+### Docker sur HAOS — montage des volumes
+
+**`"map": ["config:rw"]` ignoré** — HA supervisor est censé monter `/config` de HAOS dans `/config` du conteneur via ce champ. En pratique il ne le faisait pas pour notre add-on buildé manuellement. Le chemin réel de `/config` sur HAOS est `/mnt/data/supervisor/homeassistant` mais il n'est pas accessible depuis le conteneur sans mount explicite.
+
+**Build depuis GitHub non pris en compte** — après chaque `ha apps rebuild`, HA réutilisait l'image Docker cachée au lieu de rebuilder depuis le repo GitHub. Solution : supprimer manuellement le conteneur et l'image avec `docker rm -f` et `docker rmi -f` avant de rebuilder, ou builder manuellement avec `docker build --no-cache`.
+
+**Layer overlay Docker** — les fichiers écrits dans `/data/` depuis un conteneur test (via `docker cp`) n'étaient pas visibles dans le conteneur HA, car HA crée un nouveau layer overlay à chaque démarrage. Seul le bind mount physique `/mnt/data/supervisor/addons/data/fc4e2b3e_tado_planning/` persiste réellement. Il faut copier les fichiers sur ce chemin filesystem, pas via `docker cp` dans un conteneur temporaire.
+
+**Dossier `schedules/` invisible** — le dossier existait sur le filesystem mais le conteneur ne le voyait pas, car `options.json` était injecté par HA dans un layer overlay distinct du bind mount. Le dossier `schedules/` créé sur le filesystem était masqué par ce layer. Solution : créer le dossier depuis l'intérieur d'un conteneur avec le bon mount, puis copier les fichiers via `docker cp`.
