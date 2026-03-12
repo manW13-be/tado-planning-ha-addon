@@ -9,21 +9,26 @@ if [ "$VERBOSITY" -gt 0 ] 2>/dev/null; then
 fi
 
 echo "[TADO] Add-on started — verbosity: $VERBOSITY"
-echo "[TADO] Listing root directories:"
-ls /
-echo "[TADO] Listing /config/:"
-ls /config/ 2>&1 || echo "Cannot access /config/"
-echo "[TADO] Listing /homeassistant/:"
-ls /homeassistant/ 2>&1 || echo "Cannot access /homeassistant/"
 
-SCRIPT="/config/tado/tado_planning.py"
-if [ ! -f "$SCRIPT" ]; then
-    echo "[ERROR] Script not found: $SCRIPT"
+# Cherche le script dans plusieurs emplacements possibles
+for BASE in /config /mnt/data/supervisor/homeassistant /homeassistant; do
+    if [ -f "$BASE/tado/tado_planning.py" ]; then
+        SCRIPT="$BASE/tado/tado_planning.py"
+        SCHEDULES="$BASE/tado/schedules"
+        break
+    fi
+done
+
+if [ -z "$SCRIPT" ]; then
+    echo "[ERROR] Script not found in any known location"
+    echo "[ERROR] Tried: /config /mnt/data/supervisor/homeassistant /homeassistant"
     exit 1
 fi
 
+echo "[TADO] Script : $SCRIPT"
+
 while true; do
     echo "[TADO] Running at $(date '+%d/%m/%Y %H:%M')"
-    python3 "$SCRIPT" $VFLAG || echo "[TADO] Error $?"
+    TADO_SCHEDULES_DIR="$SCHEDULES" python3 "$SCRIPT" $VFLAG || echo "[TADO] Error $?"
     sleep $(( 3600 - $(date +%s) % 3600 ))
 done
