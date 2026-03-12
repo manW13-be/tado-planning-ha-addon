@@ -357,7 +357,7 @@ def get_tado_client() -> Tado:
     tado   = Tado(token_file_path=TOKEN_FILE)
     status = tado.device_activation_status()
 
-    if status == "PENDING":
+    if status.value == "PENDING":
         url = tado.device_verification_url()
         log(f"\n[AUTH] Première connexion requise.")
         log(f"[AUTH] Ouvrez cette URL dans votre navigateur :\n  {url}\n")
@@ -369,7 +369,7 @@ def get_tado_client() -> Tado:
         tado.device_activation()
         status = tado.device_activation_status()
 
-    if status == "COMPLETED":
+    if status.value == "COMPLETED":
         log("[AUTH] Authentification réussie.")
     else:
         log(f"[AUTH] Statut inattendu : {status}")
