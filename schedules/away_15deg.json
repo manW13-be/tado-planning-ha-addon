@@ -1,42 +1,22 @@
 {
-  "ch_lucas": {
-    "away_temp": 15.0,
-    "away_enabled": true
-  },
-  "ch_oscar": {
-    "away_temp": 15.0,
-    "away_enabled": true
-  },
-  "ch_manu": {
-    "away_temp": 15.0,
-    "away_enabled": true
-  },
-  "sdd": {
-    "away_temp": 15.0,
-    "away_enabled": true
-  },
-  "sdb": {
-    "away_temp": 15.0,
-    "away_enabled": true
-  },
-  "bureau": {
-    "away_temp": 15.0,
-    "away_enabled": true
-  },
-  "salle_a_manger": {
-    "away_temp": 15.0,
-    "away_enabled": true
-  },
-  "hall": {
-    "away_temp": 15.0,
-    "away_enabled": true
-  },
-  "salon_tv": {
-    "away_temp": 15.0,
-    "away_enabled": true
-  },
-  "cuisine": {
-    "away_temp": 15.0,
-    "away_enabled": true
+  "zones": {
+    "office": {
+      "timetable": "THREE_DAY",
+      "slots": {
+        "MONDAY_TO_FRIDAY": [
+          {"start": "00:00", "end": "00:00", "temp": 15.0}
+        ],
+        "SATURDAY": [
+          {"start": "00:00", "end": "00:00", "temp": 15.0}
+        ],
+        "SUNDAY": [
+          {"start": "00:00", "end": "00:00", "temp": 15.0}
+        ]
+      },
+      "away_temp": 15.0,
+      "away_enabled": true,
+      "preheat": "ECO",
+      "early_start": false
+    }
   }
 }

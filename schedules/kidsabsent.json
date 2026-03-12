@@ -1,249 +1,183 @@
 {
-  "ch_lucas": {
-    "timetable": "ONE_DAY",
-    "week": [
-      {
-        "start": "00:00",
-        "temp": 15
+  "zones": {
+    "bedroom_1": {
+      "timetable": "THREE_DAY",
+      "slots": {
+        "MONDAY_TO_FRIDAY": [
+          {"start": "00:00", "end": "07:00", "temp": 15.0},
+          {"start": "07:00", "end": "09:00", "temp": 18.0},
+          {"start": "09:00", "end": "17:00", "temp": 15.0},
+          {"start": "17:00", "end": "22:00", "temp": 18.0},
+          {"start": "22:00", "end": "00:00", "temp": 15.0}
+        ],
+        "SATURDAY": [
+          {"start": "00:00", "end": "08:00", "temp": 15.0},
+          {"start": "08:00", "end": "23:00", "temp": 18.0},
+          {"start": "23:00", "end": "00:00", "temp": 15.0}
+        ],
+        "SUNDAY": [
+          {"start": "00:00", "end": "08:00", "temp": 15.0},
+          {"start": "08:00", "end": "23:00", "temp": 18.0},
+          {"start": "23:00", "end": "00:00", "temp": 15.0}
+        ]
       },
-      {
-        "start": "10:00",
-        "temp": 15
+      "away_temp": 15.0,
+      "away_enabled": true,
+      "preheat": "ECO",
+      "early_start": false
+    },
+    "bedroom_2": {
+      "timetable": "THREE_DAY",
+      "slots": {
+        "MONDAY_TO_FRIDAY": [
+          {"start": "00:00", "end": "07:00", "temp": 15.0},
+          {"start": "07:00", "end": "09:00", "temp": 18.0},
+          {"start": "09:00", "end": "17:00", "temp": 15.0},
+          {"start": "17:00", "end": "22:00", "temp": 18.0},
+          {"start": "22:00", "end": "00:00", "temp": 15.0}
+        ],
+        "SATURDAY": [
+          {"start": "00:00", "end": "08:00", "temp": 15.0},
+          {"start": "08:00", "end": "23:00", "temp": 18.0},
+          {"start": "23:00", "end": "00:00", "temp": 15.0}
+        ],
+        "SUNDAY": [
+          {"start": "00:00", "end": "08:00", "temp": 15.0},
+          {"start": "08:00", "end": "23:00", "temp": 18.0},
+          {"start": "23:00", "end": "00:00", "temp": 15.0}
+        ]
       },
-      {
-        "start": "13:00",
-        "temp": 15
+      "away_temp": 15.0,
+      "away_enabled": true,
+      "preheat": "ECO",
+      "early_start": false
+    },
+    "bedroom_parents": {
+      "timetable": "THREE_DAY",
+      "slots": {
+        "MONDAY_TO_FRIDAY": [
+          {"start": "00:00", "end": "07:00", "temp": 15.0},
+          {"start": "07:00", "end": "09:00", "temp": 19.0},
+          {"start": "09:00", "end": "22:00", "temp": 15.0},
+          {"start": "22:00", "end": "00:00", "temp": 18.0}
+        ],
+        "SATURDAY": [
+          {"start": "00:00", "end": "08:00", "temp": 15.0},
+          {"start": "08:00", "end": "23:00", "temp": 19.0},
+          {"start": "23:00", "end": "00:00", "temp": 18.0}
+        ],
+        "SUNDAY": [
+          {"start": "00:00", "end": "08:00", "temp": 15.0},
+          {"start": "08:00", "end": "23:00", "temp": 19.0},
+          {"start": "23:00", "end": "00:00", "temp": 18.0}
+        ]
       },
-      {
-        "start": "19:00",
-        "temp": 15
+      "away_temp": 15.0,
+      "away_enabled": true,
+      "preheat": "ECO",
+      "early_start": true
+    },
+    "living_room": {
+      "timetable": "THREE_DAY",
+      "slots": {
+        "MONDAY_TO_FRIDAY": [
+          {"start": "00:00", "end": "07:00", "temp": 15.0},
+          {"start": "07:00", "end": "09:00", "temp": 19.0},
+          {"start": "09:00", "end": "17:00", "temp": 17.0},
+          {"start": "17:00", "end": "22:30", "temp": 19.0},
+          {"start": "22:30", "end": "00:00", "temp": 15.0}
+        ],
+        "SATURDAY": [
+          {"start": "00:00", "end": "08:00", "temp": 15.0},
+          {"start": "08:00", "end": "23:00", "temp": 19.0},
+          {"start": "23:00", "end": "00:00", "temp": 15.0}
+        ],
+        "SUNDAY": [
+          {"start": "00:00", "end": "08:00", "temp": 15.0},
+          {"start": "08:00", "end": "23:00", "temp": 19.0},
+          {"start": "23:00", "end": "00:00", "temp": 15.0}
+        ]
       },
-      {
-        "start": "22:00",
-        "temp": 15
-      }
-    ],
-    "away_temp": 15.0,
-    "away_enabled": false,
-    "preheat": "off",
-    "early_start": false
-  },
-  "ch_oscar": {    "timetable": "ONE_DAY",
-    "week": [
-      {
-        "start": "00:00",
-        "temp": 15
+      "away_temp": 15.0,
+      "away_enabled": true,
+      "preheat": "ECO",
+      "early_start": true
+    },
+    "kitchen": {
+      "timetable": "THREE_DAY",
+      "slots": {
+        "MONDAY_TO_FRIDAY": [
+          {"start": "00:00", "end": "07:00", "temp": 15.0},
+          {"start": "07:00", "end": "09:00", "temp": 18.0},
+          {"start": "09:00", "end": "17:00", "temp": 16.0},
+          {"start": "17:00", "end": "22:00", "temp": 18.0},
+          {"start": "22:00", "end": "00:00", "temp": 15.0}
+        ],
+        "SATURDAY": [
+          {"start": "00:00", "end": "08:00", "temp": 15.0},
+          {"start": "08:00", "end": "22:00", "temp": 18.0},
+          {"start": "22:00", "end": "00:00", "temp": 15.0}
+        ],
+        "SUNDAY": [
+          {"start": "00:00", "end": "08:00", "temp": 15.0},
+          {"start": "08:00", "end": "22:00", "temp": 18.0},
+          {"start": "22:00", "end": "00:00", "temp": 15.0}
+        ]
       },
-      {
-        "start": "10:00",
-        "temp": 15
+      "away_temp": 15.0,
+      "away_enabled": true,
+      "preheat": "ECO",
+      "early_start": false
+    },
+    "bathroom": {
+      "timetable": "THREE_DAY",
+      "slots": {
+        "MONDAY_TO_FRIDAY": [
+          {"start": "00:00", "end": "07:00", "temp": 15.0},
+          {"start": "07:00", "end": "09:00", "temp": 21.0},
+          {"start": "09:00", "end": "20:00", "temp": 15.0},
+          {"start": "20:00", "end": "22:00", "temp": 21.0},
+          {"start": "22:00", "end": "00:00", "temp": 15.0}
+        ],
+        "SATURDAY": [
+          {"start": "00:00", "end": "08:00", "temp": 15.0},
+          {"start": "08:00", "end": "10:00", "temp": 21.0},
+          {"start": "10:00", "end": "20:00", "temp": 15.0},
+          {"start": "20:00", "end": "22:00", "temp": 21.0},
+          {"start": "22:00", "end": "00:00", "temp": 15.0}
+        ],
+        "SUNDAY": [
+          {"start": "00:00", "end": "08:00", "temp": 15.0},
+          {"start": "08:00", "end": "10:00", "temp": 21.0},
+          {"start": "10:00", "end": "20:00", "temp": 15.0},
+          {"start": "20:00", "end": "22:00", "temp": 21.0},
+          {"start": "22:00", "end": "00:00", "temp": 15.0}
+        ]
       },
-      {
-        "start": "13:00",
-        "temp": 15
+      "away_temp": 15.0,
+      "away_enabled": true,
+      "preheat": "ECO",
+      "early_start": false
+    },
+    "office": {
+      "timetable": "THREE_DAY",
+      "slots": {
+        "MONDAY_TO_FRIDAY": [
+          {"start": "00:00", "end": "08:00", "temp": 15.0},
+          {"start": "08:00", "end": "18:00", "temp": 19.0},
+          {"start": "18:00", "end": "00:00", "temp": 15.0}
+        ],
+        "SATURDAY": [
+          {"start": "00:00", "end": "00:00", "temp": 15.0}
+        ],
+        "SUNDAY": [
+          {"start": "00:00", "end": "00:00", "temp": 15.0}
+        ]
       },
-      {
-        "start": "19:00",
-        "temp": 15
-      },
-      {
-        "start": "22:00",
-        "temp": 15
-      }
-    ],
-    "away_temp": 15.0,
-    "away_enabled": false,
-    "preheat": "off",
-    "early_start": false
-  },
-  "sdd": {    "timetable": "ONE_DAY",
-    "week": [
-      {
-        "start": "00:00",
-        "temp": 15
-      },
-      {
-        "start": "10:00",
-        "temp": 15
-      },
-      {
-        "start": "13:00",
-        "temp": 15
-      },
-      {
-        "start": "19:00",
-        "temp": 15
-      },
-      {
-        "start": "22:00",
-        "temp": 15
-      }
-    ],
-    "away_temp": 15.0,
-    "away_enabled": false,
-    "preheat": "off",
-    "early_start": false
-  },
-  "sdb": {    "week": [
-      {
-        "start": "00:00",
-        "temp": 15
-      },
-      {
-        "start": "10:00",
-        "temp": 15
-      },
-      {
-        "start": "13:00",
-        "temp": 15
-      },
-      {
-        "start": "19:00",
-        "temp": 15
-      },
-      {
-        "start": "22:00",
-        "temp": 15
-      }
-    ],
-    "away_temp": 15.0,
-    "away_enabled": false,
-    "preheat": "off",
-    "early_start": false
-  },
-  "bureau": {    "week": [
-      {
-        "start": "00:00",
-        "temp": 15
-      },
-      {
-        "start": "10:00",
-        "temp": 15
-      },
-      {
-        "start": "13:00",
-        "temp": 15
-      },
-      {
-        "start": "19:00",
-        "temp": 15
-      },
-      {
-        "start": "22:00",
-        "temp": 15
-      }
-    ],
-    "away_temp": 15.0,
-    "away_enabled": false,
-    "preheat": "off",
-    "early_start": false
-  },
-  "salle_a_manger": {    "week": [
-      {
-        "start": "00:00",
-        "temp": 15
-      },
-      {
-        "start": "10:00",
-        "temp": 15
-      },
-      {
-        "start": "13:00",
-        "temp": 15
-      },
-      {
-        "start": "19:00",
-        "temp": 15
-      },
-      {
-        "start": "22:00",
-        "temp": 15
-      }
-    ],
-    "away_temp": 15.0,
-    "away_enabled": false,
-    "preheat": "off",
-    "early_start": false
-  },
-  "hall": {    "week": [
-      {
-        "start": "00:00",
-        "temp": 15
-      },
-      {
-        "start": "10:00",
-        "temp": 15
-      },
-      {
-        "start": "13:00",
-        "temp": 15
-      },
-      {
-        "start": "19:00",
-        "temp": 15
-      },
-      {
-        "start": "22:00",
-        "temp": 15
-      }
-    ],
-    "away_temp": 15.0,
-    "away_enabled": false,
-    "preheat": "off",
-    "early_start": false
-  },
-  "salon_tv": {    "week": [
-      {
-        "start": "00:00",
-        "temp": 15
-      },
-      {
-        "start": "10:00",
-        "temp": 15
-      },
-      {
-        "start": "13:00",
-        "temp": 15
-      },
-      {
-        "start": "19:00",
-        "temp": 15
-      },
-      {
-        "start": "22:00",
-        "temp": 15
-      }
-    ],
-    "away_temp": 15.0,
-    "away_enabled": false,
-    "preheat": "off",
-    "early_start": false
-  },
-  "cuisine": {    "week": [
-      {
-        "start": "00:00",
-        "temp": 15
-      },
-      {
-        "start": "10:00",
-        "temp": 15
-      },
-      {
-        "start": "13:00",
-        "temp": 15
-      },
-      {
-        "start": "19:00",
-        "temp": 15
-      },
-      {
-        "start": "22:00",
-        "temp": 15
-      }
-    ],
-    "away_temp": 15.0,
-    "away_enabled": false,
-    "preheat": "off",
-    "early_start": false
+      "away_temp": 15.0,
+      "away_enabled": true,
+      "preheat": "ECO",
+      "early_start": false
+    }
   }
 }
