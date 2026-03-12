@@ -1,6 +1,6 @@
 {
   "name": "Tado Planning",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "slug": "tado_planning",
   "description": "Tado heating schedule manager",
   "arch": ["aarch64"],
@@ -12,8 +12,5 @@
   "schema": {
     "verbosity": "int"
   },
-  "map": ["config:rw"],
-  "build_from": {
-    "aarch64": "python:3.11-slim"
-  }
+  "map": ["homeassistant_config:rw"]
 }
