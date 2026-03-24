@@ -46,6 +46,9 @@ while true; do
     TADO_TOKEN_FILE="/data/tado_refresh_token" \
     python3 /tado_planning.py $VFLAG 2>&1 || echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — Script exited with error $?"
     NEXT=$(( 3600 - $(date +%s) % 3600 ))
-    echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — Next run in ${NEXT}s"
+    NEXT_TIME=$(date -d "+${NEXT} seconds" '+%d/%m/%Y %H:%M:%S')
+    echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — Next run at ${NEXT_TIME}"
     sleep $NEXT
+    
+    
 done
