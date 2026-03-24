@@ -21,6 +21,18 @@ fi
 VERSION=$(jq -r '.version' config.json)
 IMAGE="fc4e2b3e/aarch64-addon-tado_planning:$VERSION"
 
+# Supprimer les anciennes images tado
+echo "[DEPLOY] Cleaning old images..."
+OLD_IMAGES=$(docker images | grep "fc4e2b3e/aarch64-addon-tado_planning" | awk '{print $1":"$2}')
+if [ -n "$OLD_IMAGES" ]; then
+    ha apps stop "$ADDON_ID" 2>/dev/null || true
+    sleep 2
+    docker rm -f $(docker ps -a | grep tado | awk '{print $1}') 2>/dev/null || true
+    for img in $OLD_IMAGES; do
+        docker rmi "$img" 2>/dev/null && echo "[DEPLOY] Removed $img" || true
+    done
+fi
+
 echo "[DEPLOY] Building image $IMAGE..."
 docker build --no-cache -t "$IMAGE" "$REPO_DIR"
 echo "[DEPLOY] Build OK"
