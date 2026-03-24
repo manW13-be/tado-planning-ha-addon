@@ -1,0 +1,46 @@
+{
+  "_comment1": "Cycle de 2 semaines : odd (impaire) et even (paire)",
+  "_comment2": "Jours valides : monday tuesday wednesday thursday friday saturday sunday",
+  "_comment3": "Niveau 1 : config principale (kidspresent / kidsabsent)",
+  "_comment4": "Niveau 2 : surcharge partielle par-dessus le niveau 1 (away_18deg / away_15deg)",
+
+  "events": [
+
+    {
+      "_comment": "--- NIVEAU 1 ---"
+    },
+    {
+      "day": "friday",
+      "time": "12:00",
+      "week": "odd",
+      "level": 1,
+      "config": "kidsabsent"
+    },
+    {
+      "day": "friday",
+      "time": "12:00",
+      "week": "even",
+      "level": 1,
+      "config": "kidspresent"
+    },
+
+    {
+      "_comment": "--- NIVEAU 2 ---"
+    },
+    {
+      "day": "tuesday",
+      "time": "07:00",
+      "week": "even",
+      "level": 2,
+      "config": "away_18deg"
+    },
+    {
+      "day": "tuesday",
+      "time": "11:00",
+      "week": "even",
+      "level": 2,
+      "config": "away_15deg"
+    }
+
+  ]
+}

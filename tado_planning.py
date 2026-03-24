@@ -6,15 +6,29 @@ Gestion des plannings de chauffage Tado via fichiers JSON.
 
 Structure des fichiers :
     schedules/
-        planning.json          → liste d'événements avec level 1 et 2
-        normalwithkids.json    → weekconfig (températures par pièce)
+        planning_standard.json     → planning de base (odd/even, niveau 1 et 2)
+        planning_vacances.json      → exception avec période fixe ou cycle odd/even
+        planning_noel.json          → autre exception
+        normalwithkids.json        → weekconfig (températures par pièce)
         normalwithoutkids.json
         away15.json
         away18.json
         ...
 
+Format d'un fichier exception :
+    {
+        "_description": "Vacances de Pâques 2026",
+        "period": {
+            "start": "2026-04-05 00:00",
+            "end":   "2026-04-19 23:59"
+        },
+        "events": [
+            { "level": 1, "config": "awaywithkids", "week": "both", "day": "monday", "time": "00:00" }
+        ]
+    }
+
 Utilisation :
-    python3.11 tado_planning.py                                    # auto via planning.json
+    python3.11 tado_planning.py                                    # auto via planning_standard.json
     python3.11 tado_planning.py -p schedules/monplanning.json      # forcer un planning
     python3.11 tado_planning.py -c schedules/vacancewithkids.json  # forcer un weekconfig
     python3.11 tado_planning.py -d 2026-03-10                      # simuler une date
@@ -33,9 +47,9 @@ Niveaux de verbosité :
 Prérequis :
     pip3.11 install "python-tado>=0.18"
 
-NOTE : À la première exécution, une URL s'affichera pour vous authentifier
-       dans votre navigateur. Le token est ensuite sauvegardé dans
-       ~/.tado_refresh_token pour les prochaines utilisations.
+NOTE : À la première exécution sur HA, l'URL d'authentification s'affiche dans les logs.
+       Le token est ensuite sauvegardé dans /data/tado_refresh_token.
+       Sur macOS, il est sauvegardé dans le même répertoire que le script.
 """
 
 import sys
@@ -44,17 +58,29 @@ import json
 import argparse
 import webbrowser
 import datetime
+import platform
+import glob
+import time
 
 from PyTado.interface.interface import Tado
-from PyTado.http import TadoRequest, Action, Mode
+from PyTado.http import TadoRequest, Action, Mode, Domain, DeviceActivationStatus
 
 # ---------------------------------------------------------------------------
 # CONFIGURATION
 # ---------------------------------------------------------------------------
-TOKEN_FILE    = os.environ.get("TADO_TOKEN_FILE",    "/data/tado_refresh_token")
-SCHEDULES_DIR = os.environ.get("TADO_SCHEDULES_DIR", "/config/tado/schedules")
 
-PLANNING_FILE = os.path.join(SCHEDULES_DIR, "planning.json")
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+if platform.system() == "Darwin":
+    _DEFAULT_TOKEN_FILE    = os.path.join(_SCRIPT_DIR, "tado_refresh_token")
+    _DEFAULT_SCHEDULES_DIR = os.path.join(_SCRIPT_DIR, "schedules")
+else:  # Linux / HAOS
+    _DEFAULT_TOKEN_FILE    = "/data/tado_refresh_token"
+    _DEFAULT_SCHEDULES_DIR = "/data/schedules"
+
+TOKEN_FILE    = os.environ.get("TADO_TOKEN_FILE",    _DEFAULT_TOKEN_FILE)
+SCHEDULES_DIR = os.environ.get("TADO_SCHEDULES_DIR", _DEFAULT_SCHEDULES_DIR)
+
+PLANNING_STANDARD = os.path.join(SCHEDULES_DIR, "planning_standard.json")
 
 TIMETABLE_IDS = {
     "ONE_DAY":   0,
@@ -72,14 +98,12 @@ DAY_NAMES_FR = {
     3: "jeudi", 4: "vendredi", 5: "samedi", 6: "dimanche",
 }
 
-# Niveau de verbosité global (0=défaut, 1=-v, 2=-vv, 3=-vvv, 4=-vvvv)
 VERBOSITY = 0
 
 
 def log(msg: str, level: int = 0):
-    """Affiche un message si le niveau de verbosité est suffisant."""
     if VERBOSITY >= level:
-        print(msg)
+        print(msg, flush=True)
 
 
 # ---------------------------------------------------------------------------
@@ -95,7 +119,6 @@ def load_json(path: str) -> dict:
 
 
 def load_weekconfig(path: str) -> dict:
-    """Charge un fichier weekconfig JSON et valide sa structure."""
     data = load_json(path)
     for zone_name, zone_cfg in data.items():
         if zone_name.startswith("_"):
@@ -116,7 +139,6 @@ def load_weekconfig(path: str) -> dict:
 # ---------------------------------------------------------------------------
 
 def print_weekconfig_summary(config_path: str, weekconfig: dict, level: int = 1):
-    """Affiche le contenu d'un weekconfig — verbosité 1 (-v)."""
     config_name = os.path.splitext(os.path.basename(config_path))[0]
     log(f"\n[CONFIG niveau {level}] '{config_name}'", 1)
     for zone_name, zone_cfg in weekconfig.items():
@@ -138,14 +160,10 @@ def print_weekconfig_summary(config_path: str, weekconfig: dict, level: int = 1)
 
 
 # ---------------------------------------------------------------------------
-# SÉLECTION AUTOMATIQUE VIA planning.json
+# SÉLECTION AUTOMATIQUE VIA planning_standard.json
 # ---------------------------------------------------------------------------
 
 def _sort_key_for_event(event: dict) -> tuple:
-    """
-    Clé de tri pour ordonner les événements dans le cycle odd→even.
-    week_order : 0 = odd, 1 = even (both traité comme odd pour le tri)
-    """
     week_order = {"odd": 0, "even": 1, "both": 0}.get(event["week"].lower(), 0)
     day_offset = DAY_NAMES.get(event["day"].lower(), 0)
     h, m = map(int, event["time"].split(":"))
@@ -153,15 +171,6 @@ def _sort_key_for_event(event: dict) -> tuple:
 
 
 def select_config_for_level(events: list, level: int, now: datetime.datetime) -> str | None:
-    """
-    Sélectionne la config active pour un niveau donné.
-
-    Logique :
-    - Filtrer les événements du niveau
-    - Construire le cycle odd+even sur les deux semaines autour de 'now'
-    - Trouver le dernier événement passé (avec wrap-around si nécessaire)
-    - Retourner le nom de la config (sans extension)
-    """
     level_events = [e for e in events if e.get("level") == level]
     if not level_events:
         return None
@@ -185,8 +194,7 @@ def select_config_for_level(events: list, level: int, now: datetime.datetime) ->
         prev_even_monday = current_monday - datetime.timedelta(weeks=2)
         prev_odd_monday  = current_monday - datetime.timedelta(weeks=1)
 
-    def build_cycle(o_monday: datetime.datetime, e_monday: datetime.datetime) -> list:
-        """Construit la liste triée de (datetime, week_type, config) pour un cycle odd+even."""
+    def build_cycle(o_monday, e_monday):
         cycle = []
         for event in level_events_sorted:
             week       = event["week"].lower()
@@ -204,14 +212,12 @@ def select_config_for_level(events: list, level: int, now: datetime.datetime) ->
     current_cycle = build_cycle(odd_monday,     even_monday)
     prev_cycle    = build_cycle(prev_odd_monday, prev_even_monday)
 
-    # Affichage des candidats (-vv)
     log(f"\n[CANDIDATS niveau {level}] Cycle courant :", 2)
     for dt, week_type, config in current_cycle:
         past    = now >= dt
         pointer = " ◄ actif" if past else ""
         log(f"  {'✓' if past else '·'} {dt.strftime('%a %d/%m %H:%M')} ({week_type}) → {config}{pointer}", 2)
 
-    # Chercher le dernier événement passé dans le cycle courant
     chosen_config = None
     chosen_dt     = None
     for dt, week_type, config in current_cycle:
@@ -219,7 +225,6 @@ def select_config_for_level(events: list, level: int, now: datetime.datetime) ->
             chosen_config = config
             chosen_dt     = dt
 
-    # Wrap-around : si aucun événement passé, prendre le dernier du cycle précédent
     if chosen_config is None:
         if prev_cycle:
             chosen_config = prev_cycle[-1][2]
@@ -238,9 +243,6 @@ def select_config_for_level(events: list, level: int, now: datetime.datetime) ->
 
 
 def resolve_configs(planning_file: str, now: datetime.datetime) -> tuple[str, str | None]:
-    """
-    Retourne (config_level1, config_level2_or_None) depuis planning.json.
-    """
     planning = load_json(planning_file)
     events   = planning.get("events", [])
 
@@ -263,26 +265,98 @@ def resolve_configs(planning_file: str, now: datetime.datetime) -> tuple[str, st
         log(f"[ERREUR] Aucun événement de niveau 1 dans {planning_file}")
         sys.exit(1)
 
-    log(f"[INFO] Config niveau 1 active : {config_l1}")
-    if config_l2:
-        log(f"[INFO] Config niveau 2 active : {config_l2}")
-    else:
-        log(f"[INFO] Pas de config niveau 2 active")
-
     return config_l1, config_l2
 
 
 def resolve_config_path(config_name: str) -> str:
-    """Retourne le chemin complet d'un fichier config et vérifie son existence."""
     path = os.path.join(SCHEDULES_DIR, f"{config_name}.json")
     if not os.path.exists(path):
         log(f"[ERREUR] Fichier de config introuvable : {path}")
         log(f"[INFO]   Configs disponibles dans {SCHEDULES_DIR} :")
         for f in sorted(os.listdir(SCHEDULES_DIR)):
-            if f.endswith(".json") and f != os.path.basename(PLANNING_FILE):
+            if f.endswith(".json") and not os.path.basename(f).startswith("planning_"):
                 log(f"           • {os.path.splitext(f)[0]}")
         sys.exit(1)
     return path
+
+
+# ---------------------------------------------------------------------------
+# GESTION DES EXCEPTIONS
+# ---------------------------------------------------------------------------
+
+def _parse_period_dt(s: str) -> datetime.datetime:
+    try:
+        return datetime.datetime.strptime(s, "%Y-%m-%d %H:%M")
+    except ValueError:
+        log(f"[ERREUR] Format de date invalide dans une exception : '{s}' (attendu : YYYY-MM-DD HH:MM)")
+        sys.exit(1)
+
+
+def load_exception_plannings(now: datetime.datetime) -> dict[int, tuple[str, str, datetime.datetime]]:
+    """
+    Scanne tous les planning_*.json (sauf planning_standard.json) dans SCHEDULES_DIR.
+    Pour chaque niveau (1 et 2), retourne la config active dont la période débute le plus tard.
+    """
+    pattern         = os.path.join(SCHEDULES_DIR, "planning_*.json")
+    all_files       = sorted(glob.glob(pattern))
+    exception_files = [
+        f for f in all_files
+        if os.path.basename(f) != "planning_standard.json"
+    ]
+
+    if not exception_files:
+        return {}
+
+    log(f"[EXCEPTIONS] {len(exception_files)} fichier(s) trouvé(s) : "
+        f"{[os.path.basename(f) for f in exception_files]}", 1)
+
+    candidates: dict[int, list] = {1: [], 2: []}
+
+    for filepath in exception_files:
+        filename = os.path.basename(filepath)
+        data     = load_json(filepath)
+        period   = data.get("period")
+        events   = data.get("events", [])
+        desc     = data.get("_description", filename)
+
+        if not period:
+            log(f"[EXCEPTION] '{filename}' ignoré : pas de clé 'period'.", 1)
+            continue
+
+        period_start = _parse_period_dt(period["start"])
+        period_end   = _parse_period_dt(period["end"])
+
+        if not (period_start <= now <= period_end):
+            log(f"[EXCEPTION] '{filename}' hors période "
+                f"({period['start']} → {period['end']}), ignoré.", 1)
+            continue
+
+        log(f"[EXCEPTION] '{filename}' ({desc}) — période active "
+            f"({period['start']} → {period['end']})")
+
+        for level in (1, 2):
+            config = select_config_for_level(events, level, now)
+            if config:
+                candidates[level].append((period_start, config, filename))
+                log(f"[EXCEPTION] '{filename}' niveau {level} → config '{config}'", 1)
+
+    result: dict[int, tuple[str, str, datetime.datetime]] = {}
+
+    for level in (1, 2):
+        level_candidates = candidates[level]
+        if not level_candidates:
+            continue
+
+        if len(level_candidates) > 1:
+            names = [f"'{c[2]}'" for c in level_candidates]
+            log(f"[WARNING] Chevauchement détecté (niveau {level}) entre "
+                f"{', '.join(names)} — celle qui commence le plus tard est retenue.")
+
+        level_candidates.sort(key=lambda x: x[0], reverse=True)
+        chosen        = level_candidates[0]
+        result[level] = (chosen[1], chosen[2], chosen[0])
+
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -294,19 +368,19 @@ def time_to_tado(hhmm: str) -> str:
 
 
 def _make_blocks_for_day(day_type: str, slots: list) -> list:
-    times = [s["start"] for s in slots]
-    temps = [s["temp"]  for s in slots]
-    ends  = times[1:] + ["00:00"]
+    times  = [s["start"] for s in slots]
+    temps  = [s["temp"]  for s in slots]
+    ends   = times[1:] + ["00:00"]
     blocks = []
     for start, end, temp in zip(times, ends, temps):
         blocks.append({
             "dayType": day_type,
-            "start": time_to_tado(start),
-            "end":   time_to_tado(end),
+            "start":   time_to_tado(start),
+            "end":     time_to_tado(end),
             "geolocationOverride": False,
             "setting": {
-                "type": "HEATING",
-                "power": "ON",
+                "type":        "HEATING",
+                "power":       "ON",
                 "temperature": {"celsius": float(temp)}
             }
         })
@@ -314,18 +388,12 @@ def _make_blocks_for_day(day_type: str, slots: list) -> list:
 
 
 def build_blocks(zone_cfg: dict) -> dict:
-    """
-    Construit les blocs par dayType selon le timetable de la zone.
-    Supporte ONE_DAY, THREE_DAY, SEVEN_DAY.
-    """
     timetable = zone_cfg["timetable"]
     week      = zone_cfg["week"]
     weekend   = zone_cfg.get("weekend", week)
 
     if timetable == "ONE_DAY":
-        return {
-            "MONDAY_TO_SUNDAY": _make_blocks_for_day("MONDAY_TO_SUNDAY", week),
-        }
+        return {"MONDAY_TO_SUNDAY": _make_blocks_for_day("MONDAY_TO_SUNDAY", week)}
     elif timetable == "THREE_DAY":
         return {
             "MONDAY_TO_FRIDAY": _make_blocks_for_day("MONDAY_TO_FRIDAY", week),
@@ -333,16 +401,15 @@ def build_blocks(zone_cfg: dict) -> dict:
             "SUNDAY":           _make_blocks_for_day("SUNDAY",           weekend),
         }
     elif timetable == "SEVEN_DAY":
-        day_types = ["MONDAY","TUESDAY","WEDNESDAY","THURSDAY","FRIDAY","SATURDAY","SUNDAY"]
+        day_types     = ["MONDAY","TUESDAY","WEDNESDAY","THURSDAY","FRIDAY","SATURDAY","SUNDAY"]
         slots_per_day = {
             "MONDAY": week, "TUESDAY": week, "WEDNESDAY": week,
             "THURSDAY": week, "FRIDAY": week,
             "SATURDAY": weekend, "SUNDAY": weekend,
         }
         for day in day_types:
-            key = day.lower()
-            if key in zone_cfg:
-                slots_per_day[day] = zone_cfg[key]
+            if day.lower() in zone_cfg:
+                slots_per_day[day] = zone_cfg[day.lower()]
         return {day: _make_blocks_for_day(day, slots_per_day[day]) for day in day_types}
     else:
         log(f"[ERREUR] Timetable inconnu : {timetable}")
@@ -354,27 +421,68 @@ def build_blocks(zone_cfg: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 def get_tado_client() -> Tado:
+    """
+    Crée et retourne un client Tado authentifié.
+
+    Gère trois cas :
+    - NOT_STARTED : token existant chargé depuis fichier, initialisation forcée de l'API
+    - PENDING     : première connexion, affiche l'URL et attend la validation (avec polling)
+    - COMPLETED   : token frais, connexion normale
+    """
     tado   = Tado(token_file_path=TOKEN_FILE)
     status = tado.device_activation_status()
 
-    if status.value == "PENDING":
+    if status.value == "NOT_STARTED":
+        # Token chargé depuis fichier — PyTado ne met pas le statut à COMPLETED dans ce cas.
+        # On force manuellement l'initialisation de l'API.
+        log("[AUTH] Token existant détecté, initialisation...")
+        tado._http._device_activation_status = DeviceActivationStatus.COMPLETED
+        # Récupérer l'ID de la maison pour initialiser _id
+        req          = TadoRequest()
+        req.command  = "me"
+        req.action   = Action.GET
+        req.domain   = Domain.ME
+        req.mode     = Mode.OBJECT
+        me           = tado._http.request(req)
+        tado._http._id   = me["homes"][0]["id"]
+        tado._http._x_api = False  # Standard Tado (non X-line)
+
+    elif status.value == "PENDING":
+        # Première connexion : afficher l'URL et attendre la validation
         url = tado.device_verification_url()
-        log(f"\n[AUTH] Première connexion requise.")
-        log(f"[AUTH] Ouvrez cette URL dans votre navigateur :\n  {url}\n")
+        log(f"\n[AUTH] ╔══════════════════════════════════════════════════════╗")
+        log(f"[AUTH] ║         PREMIÈRE CONNEXION REQUISE                  ║")
+        log(f"[AUTH] ╠══════════════════════════════════════════════════════╣")
+        log(f"[AUTH] ║ Ouvrez cette URL dans votre navigateur :            ║")
+        log(f"[AUTH] ║                                                      ║")
+        log(f"[AUTH] ║  {url}")
+        log(f"[AUTH] ║                                                      ║")
+        log(f"[AUTH] ║ Puis validez avec votre compte Tado.                ║")
+        log(f"[AUTH] ║ Le token sera sauvegardé automatiquement.           ║")
+        log(f"[AUTH] ╚══════════════════════════════════════════════════════╝\n")
         try:
             webbrowser.open_new_tab(url)
         except Exception:
             pass
-        log("[AUTH] En attente de validation... (Ctrl+C pour annuler)")
-        tado.device_activation()
-        status = tado.device_activation_status()
 
-    if status.value == "COMPLETED":
-        log("[AUTH] Authentification réussie.")
+        log("[AUTH] En attente de validation...")
+        while True:
+            try:
+                tado.device_activation()
+                break
+            except Exception as e:
+                log(f"[AUTH] Pas encore validé, retry dans 10s... ({e})")
+                time.sleep(10)
+                tado = Tado(token_file_path=TOKEN_FILE)
+
+    elif status.value == "COMPLETED":
+        pass  # Token frais, tout va bien
+
     else:
         log(f"[AUTH] Statut inattendu : {status}")
         sys.exit(1)
 
+    log("[AUTH] Authentification réussie.")
     return tado
 
 
@@ -383,12 +491,11 @@ def get_tado_client() -> Tado:
 # ---------------------------------------------------------------------------
 
 def find_zones(tado: Tado, target_names: list) -> dict:
-    """Retourne {nom_zone_weekconfig: zone_id} pour les noms correspondant aux cibles."""
     all_zones = tado.get_zones()
-    found = {}
+    found     = {}
     for zone in all_zones:
         zone_name_lower = zone["name"].lower().replace(" ", "_")
-        zone_id = zone["id"]
+        zone_id         = zone["id"]
         for target in target_names:
             if target.lower() in zone_name_lower or zone_name_lower in target.lower():
                 found[target] = zone_id
@@ -398,18 +505,83 @@ def find_zones(tado: Tado, target_names: list) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# COMPARAISON AVANT APPLICATION
+# ---------------------------------------------------------------------------
+
+def _blocks_equal(expected: list, received: list) -> bool:
+    if len(expected) != len(received):
+        return False
+    for e, r in zip(expected, received):
+        if e["start"] != r.get("start"):
+            return False
+        if e["end"] != r.get("end"):
+            return False
+        e_temp = e["setting"]["temperature"]["celsius"]
+        r_temp = r.get("setting", {}).get("temperature", {}).get("celsius")
+        if r_temp is None or abs(e_temp - float(r_temp)) > 0.01:
+            return False
+    return True
+
+
+def zone_needs_update(tado: Tado, zone_id: int, zone_cfg: dict, zone_key: str) -> bool:
+    if "timetable" in zone_cfg and "week" in zone_cfg:
+        timetable    = zone_cfg["timetable"]
+        timetable_id = TIMETABLE_IDS[timetable]
+
+        active    = tado_get(tado, f"zones/{zone_id}/schedule/activeTimetable")
+        active_id = active.get("id") if isinstance(active, dict) else None
+        if active_id != timetable_id:
+            log(f"[DIFF]   '{zone_key}' timetable : actif={active_id}, voulu={timetable_id}", 1)
+            return True
+
+        expected_blocks = build_blocks(zone_cfg)
+        for day_type, exp_blocks in expected_blocks.items():
+            result   = tado_get(tado, f"zones/{zone_id}/schedule/timetables/{timetable_id}/blocks/{day_type}")
+            received = result if isinstance(result, list) else result.get("blocks", [])
+            if not _blocks_equal(exp_blocks, received):
+                log(f"[DIFF]   '{zone_key}' blocs {day_type} différents", 1)
+                return True
+
+    if "early_start" in zone_cfg:
+        result = tado_get(tado, f"zones/{zone_id}/earlyStart")
+        actual = result.get("enabled") if isinstance(result, dict) else None
+        if actual != zone_cfg["early_start"]:
+            log(f"[DIFF]   '{zone_key}' early_start : actif={actual}, voulu={zone_cfg['early_start']}", 1)
+            return True
+
+    if any(k in zone_cfg for k in ("away_temp", "away_enabled", "preheat")):
+        preheat_map = {
+            "off": "OFF", "eco": "ECO", "équilibre": "BALANCE", "confort": "COMFORT",
+        }
+        preheat_raw   = zone_cfg.get("preheat", "ECO").lower()
+        preheat_level = preheat_map.get(preheat_raw, preheat_raw.upper())
+        away_temp     = float(zone_cfg.get("away_temp", 15.0))
+        away_enabled  = zone_cfg.get("away_enabled", True)
+        if not away_enabled:
+            preheat_level = "OFF"
+
+        result   = tado_get(tado, f"zones/{zone_id}/awayConfiguration")
+        actual_t = result.get("minimumAwayTemperature", {}).get("celsius") if isinstance(result, dict) else None
+        actual_p = result.get("preheatingLevel") if isinstance(result, dict) else None
+
+        if actual_t is None or abs(float(actual_t) - away_temp) > 0.01:
+            log(f"[DIFF]   '{zone_key}' away_temp : actif={actual_t}, voulu={away_temp}", 1)
+            return True
+        if actual_p != preheat_level:
+            log(f"[DIFF]   '{zone_key}' preheat : actif={actual_p}, voulu={preheat_level}", 1)
+            return True
+
+    return False
+
+
+# ---------------------------------------------------------------------------
 # APPLICATION DU PLANNING
 # ---------------------------------------------------------------------------
 
 def tado_put(tado: Tado, command: str, payload):
     log(f"[API]  PUT {command}", 4)
     log(f"       payload : {json.dumps(payload, ensure_ascii=False)}", 4)
-    req = TadoRequest(
-        command=command,
-        action=Action.CHANGE,
-        payload=payload,
-        mode=Mode.OBJECT,
-    )
+    req    = TadoRequest(command=command, action=Action.CHANGE, payload=payload, mode=Mode.OBJECT)
     result = tado._http.request(req)
     log(f"       réponse : {result}", 4)
     return result
@@ -417,18 +589,13 @@ def tado_put(tado: Tado, command: str, payload):
 
 def tado_get(tado: Tado, command: str):
     log(f"[API]  GET {command}", 4)
-    req = TadoRequest(
-        command=command,
-        action=Action.GET,
-        mode=Mode.OBJECT,
-    )
+    req    = TadoRequest(command=command, action=Action.GET, mode=Mode.OBJECT)
     result = tado._http.request(req)
     log(f"       réponse : {result}", 4)
     return result
 
 
 def verify_weekconfig(tado: Tado, zones: dict, weekconfig: dict, label: str = ""):
-    """Relit le planning depuis Tado et compare avec ce qui a été envoyé."""
     log(f"\n[VÉRIFICATION{' ' + label if label else ''}] Relecture depuis Tado...", 1)
     all_ok = True
 
@@ -454,7 +621,7 @@ def verify_weekconfig(tado: Tado, zones: dict, weekconfig: dict, label: str = ""
                 log(f"\n  [{zone_key}] {day_type} — lu depuis Tado ({len(received)} blocs) :", 1)
                 for b in received:
                     start = b.get("start", "?")
-                    end   = b.get("end", "?")
+                    end   = b.get("end",   "?")
                     temp  = b.get("setting", {}).get("temperature", {}).get("celsius", "?")
                     log(f"    {start} → {end} : {temp}°C", 1)
                 if len(received) != len(expected_blocks[day_type]):
@@ -482,11 +649,12 @@ def verify_weekconfig(tado: Tado, zones: dict, weekconfig: dict, label: str = ""
         log(f"[!] Des différences ont été détectées.")
 
 
-def apply_weekconfig(tado: Tado, weekconfig: dict, config_name: str, level: int = 1):
-    """Applique un weekconfig à toutes les zones qu'il définit."""
+def apply_weekconfig(tado: Tado, weekconfig: dict, config_name: str, level: int = 1,
+                     source: str = "standard"):
     zone_targets = [k for k in weekconfig.keys() if not k.startswith("_")]
 
-    log(f"\n[APPLICATION niveau {level}] '{config_name}' — {len(zone_targets)} zone(s)...", 1)
+    log(f"\n[APPLICATION niveau {level}] '{config_name}' "
+        f"(source: {source}) — {len(zone_targets)} zone(s)...")
     zones = find_zones(tado, zone_targets)
 
     if not zones:
@@ -494,19 +662,27 @@ def apply_weekconfig(tado: Tado, weekconfig: dict, config_name: str, level: int 
         log(f"[INFO]   Zones cherchées : {zone_targets}")
         sys.exit(1)
 
-    success_count = 0
+    updated_count = 0
+    skipped_count = 0
 
     for zone_key, zone_id in zones.items():
         zone_cfg = weekconfig[zone_key]
+
+        log(f"[CHECK] '{zone_key}' — lecture config en place...", 1)
+
+        if not zone_needs_update(tado, zone_id, zone_cfg, zone_key):
+            log(f"[SKIP]  '{zone_key}' — déjà conforme, aucune modification.")
+            skipped_count += 1
+            continue
+
+        log(f"[UPDATE] '{zone_key}' — mise à jour nécessaire.", 1)
 
         if "timetable" in zone_cfg and "week" in zone_cfg:
             timetable     = zone_cfg["timetable"]
             timetable_id  = TIMETABLE_IDS[timetable]
             blocks_by_day = build_blocks(zone_cfg)
 
-            tado_put(tado,
-                     f"zones/{zone_id}/schedule/activeTimetable",
-                     {"id": timetable_id})
+            tado_put(tado, f"zones/{zone_id}/schedule/activeTimetable", {"id": timetable_id})
             log(f"[OK]   '{zone_key}' timetable {timetable} activé", 1)
 
             for day_type, day_blocks in blocks_by_day.items():
@@ -519,38 +695,33 @@ def apply_weekconfig(tado: Tado, weekconfig: dict, config_name: str, level: int 
                          day_blocks)
 
         if "early_start" in zone_cfg:
-            tado_put(tado,
-                     f"zones/{zone_id}/earlyStart",
-                     {"enabled": zone_cfg["early_start"]})
+            tado_put(tado, f"zones/{zone_id}/earlyStart", {"enabled": zone_cfg["early_start"]})
             log(f"[OK]   '{zone_key}' early start : "
                 f"{'activé' if zone_cfg['early_start'] else 'désactivé'}", 1)
 
         if any(k in zone_cfg for k in ("away_temp", "away_enabled", "preheat")):
             preheat_map = {
-                "off":       "OFF",
-                "eco":       "ECO",
-                "équilibre": "BALANCE",
-                "confort":   "COMFORT",
+                "off": "OFF", "eco": "ECO", "équilibre": "BALANCE", "confort": "COMFORT",
             }
             preheat_raw   = zone_cfg.get("preheat", "ECO").lower()
             preheat_level = preheat_map.get(preheat_raw, preheat_raw.upper())
             away_temp     = zone_cfg.get("away_temp", 15.0)
             away_enabled  = zone_cfg.get("away_enabled", True)
-
             if not away_enabled:
                 preheat_level = "OFF"
 
             tado_put(tado, f"zones/{zone_id}/awayConfiguration", {
-                "type": "HEATING",
-                "preheatingLevel": preheat_level,
+                "type":              "HEATING",
+                "preheatingLevel":   preheat_level,
                 "minimumAwayTemperature": {"celsius": float(away_temp)}
             })
             log(f"[OK]   '{zone_key}' away : {away_temp}°C, préchauffage : {preheat_level}"
                 f"{' (désactivé)' if not away_enabled else ''}", 1)
 
-        success_count += 1
+        updated_count += 1
 
-    log(f"[✓] Niveau {level} '{config_name}' : {success_count}/{len(zones)} zones appliquées.")
+    log(f"[✓] Niveau {level} '{config_name}' : "
+        f"{updated_count} zone(s) mise(s) à jour, {skipped_count} inchangée(s).")
 
     verify_weekconfig(tado, zones, weekconfig, label=f"niveau {level}")
 
@@ -566,30 +737,17 @@ def main():
         description="Applique un planning de chauffage Tado via fichiers JSON.",
         formatter_class=argparse.RawTextHelpFormatter,
     )
-    parser.add_argument(
-        "-p", "--planning",
-        metavar="planning.json",
-        help="Fichier planning à utiliser (défaut : schedules/planning.json)"
-    )
-    parser.add_argument(
-        "-c", "--config",
-        metavar="weekconfig.json",
-        help="Forcer un fichier weekconfig directement (ignore le planning, niveau 1 uniquement)"
-    )
-    parser.add_argument(
-        "-d", "--date",
-        metavar="YYYY-MM-DD",
-        help="Simuler une date spécifique pour la sélection du planning (ex: 2026-03-10)"
-    )
-    parser.add_argument(
-        "-v", "--verbose",
-        action="count",
-        default=0,
-        help=("-v    : contenu des configs actives\n"
-              "-vv   : + candidats du cycle de sélection\n"
-              "-vvv  : + blocs envoyés à l'API\n"
-              "-vvvv : + requêtes PUT/GET brutes")
-    )
+    parser.add_argument("-p", "--planning", metavar="planning.json",
+                        help="Fichier planning à utiliser (défaut : planning_standard.json)")
+    parser.add_argument("-c", "--config",   metavar="weekconfig.json",
+                        help="Forcer un fichier weekconfig directement (niveau 1 uniquement)")
+    parser.add_argument("-d", "--date",     metavar="YYYY-MM-DD",
+                        help="Simuler une date spécifique (ex: 2026-04-10)")
+    parser.add_argument("-v", "--verbose",  action="count", default=0,
+                        help=("-v    : contenu des configs actives\n"
+                              "-vv   : + candidats du cycle\n"
+                              "-vvv  : + blocs envoyés à l'API\n"
+                              "-vvvv : + requêtes PUT/GET brutes"))
     args = parser.parse_args()
 
     VERBOSITY = min(args.verbose, 4)
@@ -602,7 +760,6 @@ def main():
     if args.config and args.date:
         log("[AVERTISSEMENT] -d est ignoré avec -c (weekconfig forcé).")
 
-    # Résolution de la date simulée
     if args.date:
         try:
             sim_now = datetime.datetime.strptime(args.date, "%Y-%m-%d")
@@ -613,8 +770,10 @@ def main():
     else:
         sim_now = datetime.datetime.now()
 
+    # ------------------------------------------------------------------
+    # Mode -c : weekconfig forcé
+    # ------------------------------------------------------------------
     if args.config:
-        # Mode -c : appliquer directement un weekconfig (niveau 1 uniquement)
         config_path = args.config
         if not config_path.endswith(".json"):
             config_path += ".json"
@@ -625,45 +784,67 @@ def main():
 
         log("[TADO] Connexion...")
         tado      = get_tado_client()
-        me        = tado.get_me()
-        home_name = me["homes"][0]["name"]
+        home_name = tado.get_me()["homes"][0]["name"]
         log(f"[TADO] Maison : '{home_name}'")
 
-        apply_weekconfig(tado, weekconfig_l1, config_name_l1, level=1)
+        apply_weekconfig(tado, weekconfig_l1, config_name_l1, level=1, source="forcé")
+        return
 
-    else:
-        # Mode auto ou -p : résolution via planning.json
-        planning_file = args.planning if args.planning else PLANNING_FILE
-        if args.planning:
-            log(f"[MODE] Planning forcé : {planning_file}")
-        else:
-            log(f"[MODE] Planning par défaut : {planning_file}")
+    # ------------------------------------------------------------------
+    # Mode auto : planning_standard + exceptions
+    # ------------------------------------------------------------------
+    planning_file = args.planning if args.planning else PLANNING_STANDARD
+    log(f"[MODE] Planning standard : {planning_file}")
 
-        config_name_l1, config_name_l2 = resolve_configs(planning_file, sim_now)
+    # 1. Résoudre le planning standard
+    config_name_l1, config_name_l2 = resolve_configs(planning_file, sim_now)
+    log(f"[INFO] Standard — niveau 1 : {config_name_l1}")
+    log(f"[INFO] Standard — niveau 2 : {config_name_l2 or '(aucun)'}")
 
-        config_path_l1 = resolve_config_path(config_name_l1)
-        weekconfig_l1  = load_weekconfig(config_path_l1)
-        print_weekconfig_summary(config_path_l1, weekconfig_l1, level=1)
+    # 2. Chercher les exceptions actives
+    exceptions = load_exception_plannings(sim_now)
 
-        weekconfig_l2  = None
-        config_path_l2 = None
-        if config_name_l2:
-            config_path_l2 = resolve_config_path(config_name_l2)
-            weekconfig_l2  = load_weekconfig(config_path_l2)
-            print_weekconfig_summary(config_path_l2, weekconfig_l2, level=2)
+    # 3. Appliquer les exceptions par-dessus le standard
+    final_l1_name   = config_name_l1
+    final_l1_source = "standard"
+    if 1 in exceptions:
+        exc_config, exc_file, exc_start = exceptions[1]
+        log(f"[INFO] Exception active (niveau 1) : '{exc_file}' → config '{exc_config}' "
+            f"(depuis {exc_start.strftime('%d/%m/%Y %H:%M')})")
+        final_l1_name   = exc_config
+        final_l1_source = exc_file
 
-        log("[TADO] Connexion...")
-        tado      = get_tado_client()
-        me        = tado.get_me()
-        home_name = me["homes"][0]["name"]
-        log(f"[TADO] Maison : '{home_name}'")
+    final_l2_name   = config_name_l2
+    final_l2_source = "standard"
+    if 2 in exceptions:
+        exc_config, exc_file, exc_start = exceptions[2]
+        log(f"[INFO] Exception active (niveau 2) : '{exc_file}' → config '{exc_config}' "
+            f"(depuis {exc_start.strftime('%d/%m/%Y %H:%M')})")
+        final_l2_name   = exc_config
+        final_l2_source = exc_file
 
-        # Niveau 1 toujours appliqué en premier
-        apply_weekconfig(tado, weekconfig_l1, config_name_l1, level=1)
+    # 4. Charger et afficher les weekconfigs finaux
+    config_path_l1 = resolve_config_path(final_l1_name)
+    weekconfig_l1  = load_weekconfig(config_path_l1)
+    print_weekconfig_summary(config_path_l1, weekconfig_l1, level=1)
 
-        # Niveau 2 appliqué par-dessus si actif
-        if weekconfig_l2 and config_name_l2:
-            apply_weekconfig(tado, weekconfig_l2, config_name_l2, level=2)
+    weekconfig_l2  = None
+    config_path_l2 = None
+    if final_l2_name:
+        config_path_l2 = resolve_config_path(final_l2_name)
+        weekconfig_l2  = load_weekconfig(config_path_l2)
+        print_weekconfig_summary(config_path_l2, weekconfig_l2, level=2)
+
+    # 5. Connexion et application
+    log("[TADO] Connexion...")
+    tado      = get_tado_client()
+    home_name = tado.get_me()["homes"][0]["name"]
+    log(f"[TADO] Maison : '{home_name}'")
+
+    apply_weekconfig(tado, weekconfig_l1, final_l1_name, level=1, source=final_l1_source)
+
+    if weekconfig_l2 and final_l2_name:
+        apply_weekconfig(tado, weekconfig_l2, final_l2_name, level=2, source=final_l2_source)
 
 
 if __name__ == "__main__":
