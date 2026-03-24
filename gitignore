@@ -1,0 +1,11 @@
+# Token d'authentification Tado — ne jamais committer
+tado_refresh_token
+*.token
+
+# macOS
+.DS_Store
+__pycache__/
+*.pyc
+
+# Fichiers de test locaux
+*.log
