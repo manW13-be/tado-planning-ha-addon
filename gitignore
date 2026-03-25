@@ -9,3 +9,5 @@ __pycache__/
 
 # Fichiers de test locaux
 *.log
+
+schedules/
