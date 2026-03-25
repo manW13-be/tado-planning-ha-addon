@@ -1,6 +1,6 @@
 {
   "name": "Tado Planning",
-  "version": "1.0.13",
+  "version": "1.0.14",
   "slug": "tado_planning",
   "description": "Tado heating schedule manager",
   "arch": [
