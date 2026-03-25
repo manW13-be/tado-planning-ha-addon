@@ -1,0 +1,10 @@
+{
+  "_description": "2025-07-01..2025-07-15-nokid",
+  "period": {
+    "start": "2025-06-30 17:00",
+    "end":   "2025-07-15 16:00"
+  },
+  "events": [
+    { "level": 1, "config": "awaywithkids", "week": "both", "day": "monday", "time": "00:00" }
+  ]
+}
