@@ -40,7 +40,7 @@ case "$CONTEXT" in
             VFLAG="-$(printf '%0.sv' $(seq 1 "$VERBOSITY"))"
         fi
         SCHEDULES_DIR="/config/tado-planning/schedules"
-        DEFAULT_SCHEDULES="/default_schedules"
+        SCHEDULES_TEMPLATE="/schedules.tmpl"
         TOKEN_FILE="/data/tado_refresh_token"
         PYTHON="python3"
         SCRIPT="/tado_planning.py"
@@ -48,7 +48,7 @@ case "$CONTEXT" in
     mac)
         SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
         SCHEDULES_DIR="$SCRIPT_DIR/schedules"
-        DEFAULT_SCHEDULES="$SCRIPT_DIR/schedules"
+        SCHEDULES_TEMPLATE="$SCRIPT_DIR/schedules.tmpl"
         TOKEN_FILE="$SCRIPT_DIR/tado_refresh_token"
         PYTHON=$(which python3.11 2>/dev/null || which python3)
         SCRIPT="$SCRIPT_DIR/tado_planning.py"
@@ -58,7 +58,7 @@ case "$CONTEXT" in
     linux)
         SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
         SCHEDULES_DIR="$SCRIPT_DIR/schedules"
-        DEFAULT_SCHEDULES="$SCRIPT_DIR/schedules"
+        SCHEDULES_TEMPLATE="$SCRIPT_DIR/schedules.tmpl"
         TOKEN_FILE="/data/tado_refresh_token"
         PYTHON="python3"
         SCRIPT="$SCRIPT_DIR/tado_planning.py"
@@ -66,6 +66,27 @@ case "$CONTEXT" in
         VERBOSITY=0
         ;;
 esac
+
+# ---------------------------------------------------------------------------
+# Initialisation des schedules depuis schedules.tmpl si absent ou vide
+# ---------------------------------------------------------------------------
+init_schedules() {
+    if [ ! -d "$SCHEDULES_DIR" ] || [ -z "$(ls -A "$SCHEDULES_DIR" 2>/dev/null)" ]; then
+        if [ -d "$SCHEDULES_TEMPLATE" ]; then
+            echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — schedules/ not found — initializing from schedules.tmpl/..."
+            mkdir -p "$SCHEDULES_DIR"
+            cp "$SCHEDULES_TEMPLATE"/* "$SCHEDULES_DIR/"
+            echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — schedules/ initialized ($(ls "$SCHEDULES_DIR"/*.json 2>/dev/null | wc -l | tr -d ' ') files)"
+            echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — ⚠ Review and adapt the schedule files before next run"
+        else
+            echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — ERROR: schedules/ not found and no schedules.tmpl/ available"
+            echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — Create $SCHEDULES_DIR with your schedule files"
+            exit 1
+        fi
+    else
+        echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — Schedules found ($(ls "$SCHEDULES_DIR"/*.json 2>/dev/null | wc -l | tr -d ' ') files)"
+    fi
+}
 
 # ---------------------------------------------------------------------------
 # Fonction next run time (compatible Mac et Linux)
@@ -86,16 +107,7 @@ if [ "$CONTEXT" = "docker" ]; then
 
     echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — Add-on started — verbosity: $VERBOSITY"
 
-    # Initialisation des schedules depuis les defaults si absent ou vide
-    if [ ! -d "$SCHEDULES_DIR" ] || [ -z "$(ls -A "$SCHEDULES_DIR" 2>/dev/null)" ]; then
-        echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — Initializing schedules from defaults..."
-        mkdir -p "$SCHEDULES_DIR"
-        cp "$DEFAULT_SCHEDULES"/* "$SCHEDULES_DIR/"
-        echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — Schedules initialized in $SCHEDULES_DIR"
-        echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — Edit via Samba: config/tado-planning/schedules/"
-    else
-        echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — Schedules found ($(ls "$SCHEDULES_DIR"/*.json 2>/dev/null | wc -l | tr -d ' ') files)"
-    fi
+    init_schedules
 
     # Info token
     if [ ! -f "$TOKEN_FILE" ]; then
@@ -123,6 +135,8 @@ else
     echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — Manual run ($CONTEXT)"
     echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — Schedules : $SCHEDULES_DIR"
     echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — Token     : $TOKEN_FILE"
+
+    init_schedules
 
     TADO_SCHEDULES_DIR="$SCHEDULES_DIR" \
     TADO_TOKEN_FILE="$TOKEN_FILE" \
