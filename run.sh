@@ -48,6 +48,20 @@ if [ "$CONTEXT" = "linux" ]; then
     fi
 
     if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${ADDON_CONTAINER}$"; then
+
+        # Vérifier que run.sh dans le container est bien la version déployée
+        LOCAL_HASH=$(md5sum "$0" 2>/dev/null | awk '{print $1}')
+        CONTAINER_HASH=$(docker exec "$ADDON_CONTAINER" md5sum /run.sh 2>/dev/null | awk '{print $1}')
+        if [ -n "$LOCAL_HASH" ] && [ -n "$CONTAINER_HASH" ] && [ "$LOCAL_HASH" != "$CONTAINER_HASH" ]; then
+            echo "[WARN] run.sh in container differs from local version."
+            echo "       Run ./scripts/ha_deploy.sh first for a proper deploy,"
+            echo "       or: docker cp run.sh ${ADDON_CONTAINER}:/run.sh for a quick test."
+            echo ""
+            echo -n "       Continue anyway? [o/N] "
+            read -r confirm
+            [[ ! "$confirm" =~ ^[oOyY]$ ]] && exit 0
+        fi
+
         echo "[TADO] Delegating to container $ADDON_CONTAINER — args: $*"
         docker exec "$ADDON_CONTAINER" /run.sh "$@"
     else
@@ -137,12 +151,17 @@ next_run_time() {
 }
 
 # ---------------------------------------------------------------------------
+# Version
+# ---------------------------------------------------------------------------
+if [ "$CONTEXT" = "docker" ]; then
+    VERSION=$(jq -r '.version' /config/tado-planning/config.json 2>/dev/null || echo "unknown")
+else
+    VERSION=$(jq -r '.version' "$SCRIPT_DIR/config.json" 2>/dev/null || echo "unknown")
+fi
+
+# ---------------------------------------------------------------------------
 # Run
 # ---------------------------------------------------------------------------
-VERSION=$(jq -r '.version' "${SCRIPT_DIR:-}/config.json" 2>/dev/null \
-       || jq -r '.version' /config.json 2>/dev/null \
-       || echo "unknown")
-
 if [ "$LOOP" = true ]; then
     # --- Mode boucle (HA add-on) ---
     echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — Add-on started — v$VERSION — verbosity: $VERBOSITY"
