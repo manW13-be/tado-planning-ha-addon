@@ -17,6 +17,8 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 RESET='\033[0m'
 
+ADDON_CONTAINER="addon_fc4e2b3e_tado_planning"
+
 # --- Détection du contexte ---------------------------------------------------
 if [ -f "/.dockerenv" ]; then
     CONTEXT="docker"
@@ -30,24 +32,6 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
-case "$CONTEXT" in
-    docker)
-        TOKEN_FILE="/data/tado_refresh_token"
-        PYTHON="python3"
-        TADO_SCRIPT="/tado_planning.py"
-        ;;
-    mac)
-        TOKEN_FILE="$PROJECT_DIR/tado_refresh_token"
-        PYTHON=$(which python3.11 2>/dev/null || which python3)
-        TADO_SCRIPT="$PROJECT_DIR/tado_planning.py"
-        ;;
-    linux)
-        TOKEN_FILE="/data/tado_refresh_token"
-        PYTHON="python3"
-        TADO_SCRIPT="$PROJECT_DIR/tado_planning.py"
-        ;;
-esac
-
 # --- En-tête -----------------------------------------------------------------
 echo ""
 echo -e "${CYAN}${BOLD}╔══════════════════════════════════════════╗${RESET}"
@@ -55,20 +39,18 @@ echo -e "${CYAN}${BOLD}║      tado-planning — Zones Tado          ║${RESET
 echo -e "${CYAN}${BOLD}╚══════════════════════════════════════════╝${RESET}"
 echo ""
 
-# --- Script Python inline ----------------------------------------------------
-TADO_TOKEN_FILE="$TOKEN_FILE" \
-$PYTHON - <<EOF
-import os, sys
-sys.path.insert(0, "$(dirname "$TADO_SCRIPT")")
+# ---------------------------------------------------------------------------
+# Snippet Python partagé
+# ---------------------------------------------------------------------------
+PYTHON_SCRIPT='
+import os, sys, time, webbrowser
 
-TOKEN_FILE = os.environ.get("TADO_TOKEN_FILE", "$TOKEN_FILE")
+TOKEN_FILE = os.environ.get("TADO_TOKEN_FILE", "/data/tado_refresh_token")
 
 try:
     from PyTado.interface.interface import Tado
-    from PyTado.http import DeviceActivationStatus
-    import webbrowser, time
 except ImportError:
-    print("[ERROR] python-tado not installed. Run: pip install 'python-tado>=0.18'")
+    print("[ERROR] python-tado not installed.")
     sys.exit(1)
 
 print(f"[AUTH] Using token file: {TOKEN_FILE}")
@@ -90,8 +72,8 @@ if status.value == "PENDING":
         try:
             tado.device_activation()
             break
-        except Exception as e:
-            print(f"[AUTH] Not yet validated, retrying in 10s...")
+        except Exception:
+            print("[AUTH] Not yet validated, retrying in 10s...")
             time.sleep(10)
             tado = Tado(token_file_path=TOKEN_FILE)
 elif status.value == "EXPIRED":
@@ -112,14 +94,48 @@ home_name = me["homes"][0]["name"]
 print(f"Home : {home_name}\n")
 
 zones = tado.get_zones()
-print(f"{'Zone name':<30} {'ID':>5}   {'Type'}")
-print("-" * 50)
+print(f"  {\"Zone name\":<30} {\"ID\":>5}   {\"Type\"}")
+print("  " + "-" * 48)
 for z in sorted(zones, key=lambda x: x["name"].lower()):
-    print(f"  {z['name']:<28} {z['id']:>5}   {z.get('type', '?')}")
+    print(f"  {z[\"name\"]:<30} {z[\"id\"]:>5}   {z.get(\"type\", \"?\")}")
 
-print(f"\n{len(zones)} zone(s) found.")
+print(f"\n  {len(zones)} zone(s) found.")
 print()
-print("Use zone names (lowercased, spaces replaced by _) in your weekconfig files.")
-print("Example: 'Living Room' → 'living_room'")
+print("  Use zone names (lowercased, spaces → _) in your weekconfig files.")
+print("  Example: \"Living Room\" → \"living_room\"")
 print()
-EOF
+'
+
+# ---------------------------------------------------------------------------
+# Exécution selon le contexte
+# ---------------------------------------------------------------------------
+case "$CONTEXT" in
+    mac)
+        PYTHON=$(which python3.11 2>/dev/null || which python3)
+        TOKEN_FILE="$PROJECT_DIR/tado_refresh_token"
+        TADO_TOKEN_FILE="$TOKEN_FILE" $PYTHON -c "$PYTHON_SCRIPT"
+        ;;
+
+    linux)
+        # Sur HA : python-tado n'est disponible que dans le container du add-on
+        if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${ADDON_CONTAINER}$"; then
+            echo -e "${CYAN}ℹ  Add-on container not running — starting it...${RESET}"
+            ha apps start fc4e2b3e_tado_planning 2>/dev/null || true
+            sleep 4
+        fi
+
+        if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${ADDON_CONTAINER}$"; then
+            docker exec "$ADDON_CONTAINER" python3 -c "$PYTHON_SCRIPT"
+        else
+            echo -e "${RED}✗ Could not start the add-on container.${RESET}"
+            echo -e "  Start the add-on from the HA UI first, then retry."
+            exit 1
+        fi
+        ;;
+
+    docker)
+        # Exécuté depuis l'intérieur du container (rare)
+        TOKEN_FILE="/data/tado_refresh_token"
+        TADO_TOKEN_FILE="$TOKEN_FILE" python3 -c "$PYTHON_SCRIPT"
+        ;;
+esac

@@ -7,4 +7,4 @@ COPY tado_planning.py /tado_planning.py
 COPY run.sh /run.sh
 COPY schedules.tmpl/ /schedules.tmpl/
 RUN chmod +x /run.sh
-CMD ["/run.sh"]
+CMD ["/run.sh", "--loop"]
