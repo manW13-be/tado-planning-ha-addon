@@ -174,7 +174,7 @@ if [ "$LOOP" = true ]; then
         echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — Running..."
         TADO_SCHEDULES_DIR="$SCHEDULES_DIR" \
         TADO_TOKEN_FILE="$TOKEN_FILE" \
-        $PYTHON "$SCRIPT" "${PYTHON_ARGS[@]}" 2>&1 \
+        $PYTHON "$SCRIPT" ${PYTHON_ARGS[@]+"${PYTHON_ARGS[@]}"} 2>&1 \
             || echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — Script exited with error $?"
         echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — Next run at $(next_run_time)"
         sleep $(( 3600 - $(date +%s) % 3600 ))
@@ -188,5 +188,5 @@ else
     init_schedules
     TADO_SCHEDULES_DIR="$SCHEDULES_DIR" \
     TADO_TOKEN_FILE="$TOKEN_FILE" \
-    $PYTHON "$SCRIPT" "${PYTHON_ARGS[@]}"
+    $PYTHON "$SCRIPT" ${PYTHON_ARGS[@]+"${PYTHON_ARGS[@]}"}
 fi
