@@ -1,7 +1,9 @@
 #!/bin/bash
 # =============================================================================
-# scripts/mac_fetch.sh — Pull depuis GitHub + .gitignore → gitignore
-# Usage: ./scripts/mac_fetch.sh
+# scripts/fetch.sh — Pull depuis GitHub (universel Mac + HA SSH)
+#
+# Usage :
+#   ./scripts/fetch.sh
 # =============================================================================
 
 set -e
@@ -11,7 +13,7 @@ cd "$REPO_DIR"
 echo "[FETCH] Pulling from GitHub..."
 git pull origin main
 
-# Copier .gitignore → gitignore (éditable depuis Finder)
+# Synchro .gitignore → gitignore (visible depuis Finder/Samba)
 if [ -f ".gitignore" ]; then
     cp .gitignore gitignore
     echo "[FETCH] .gitignore → gitignore"
