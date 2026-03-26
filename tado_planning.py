@@ -242,6 +242,67 @@ def select_config_for_level(events: list, level: int, now: datetime.datetime) ->
     return chosen_config
 
 
+def select_config_for_level_with_dt(events: list, level: int, now: datetime.datetime) -> tuple[str | None, datetime.datetime | None]:
+    """Comme select_config_for_level mais retourne aussi la datetime de l'événement retenu."""
+    level_events = [e for e in events if e.get("level") == level]
+    if not level_events:
+        return None, None
+
+    level_events_sorted = sorted(level_events, key=_sort_key_for_event)
+
+    iso_week   = now.isocalendar()[1]
+    is_odd_now = (iso_week % 2 == 1)
+
+    current_monday = now - datetime.timedelta(days=now.weekday())
+    current_monday = current_monday.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    if is_odd_now:
+        odd_monday       = current_monday
+        even_monday      = current_monday + datetime.timedelta(weeks=1)
+        prev_odd_monday  = current_monday - datetime.timedelta(weeks=2)
+        prev_even_monday = current_monday - datetime.timedelta(weeks=1)
+    else:
+        even_monday      = current_monday
+        odd_monday       = current_monday + datetime.timedelta(weeks=1)
+        prev_even_monday = current_monday - datetime.timedelta(weeks=2)
+        prev_odd_monday  = current_monday - datetime.timedelta(weeks=1)
+
+    def build_cycle(o_monday, e_monday):
+        cycle = []
+        for event in level_events_sorted:
+            week       = event["week"].lower()
+            day_offset = DAY_NAMES[event["day"].lower()]
+            h, m       = map(int, event["time"].split(":"))
+            if week in ("odd", "both"):
+                dt = o_monday + datetime.timedelta(days=day_offset, hours=h, minutes=m)
+                cycle.append((dt, "odd", event["config"]))
+            if week in ("even", "both"):
+                dt = e_monday + datetime.timedelta(days=day_offset, hours=h, minutes=m)
+                cycle.append((dt, "even", event["config"]))
+        cycle.sort(key=lambda x: x[0])
+        return cycle
+
+    current_cycle = build_cycle(odd_monday, even_monday)
+    prev_cycle    = build_cycle(prev_odd_monday, prev_even_monday)
+
+    chosen_config = None
+    chosen_dt     = None
+    for dt, week_type, config in current_cycle:
+        if now >= dt:
+            chosen_config = config
+            chosen_dt     = dt
+
+    if chosen_config is None:
+        if prev_cycle:
+            chosen_config = prev_cycle[-1][2]
+            chosen_dt     = prev_cycle[-1][0]
+        elif current_cycle:
+            chosen_config = current_cycle[0][2]
+            chosen_dt     = current_cycle[0][0]
+
+    return chosen_config, chosen_dt
+
+
 def resolve_configs(planning_file: str, now: datetime.datetime) -> tuple[str, str | None]:
     planning = load_json(planning_file)
     events   = planning.get("events", [])
@@ -258,12 +319,25 @@ def resolve_configs(planning_file: str, now: datetime.datetime) -> tuple[str, st
     log(f"[INFO] Semaine ISO n°{iso_week} ({parity}, {week_key})")
     log(f"[INFO] Nous sommes : {day_fr} {now.strftime('%d/%m/%Y à %H:%M')}")
 
-    config_l1 = select_config_for_level(events, 1, now)
-    config_l2 = select_config_for_level(events, 2, now)
+    config_l1, dt_l1 = select_config_for_level_with_dt(events, 1, now)
+    config_l2, dt_l2 = select_config_for_level_with_dt(events, 2, now)
 
     if config_l1 is None:
         log(f"[ERREUR] Aucun événement de niveau 1 dans {planning_file}")
         sys.exit(1)
+
+    # Verbosity 0 : résumé du planning standard
+    planning_name = os.path.basename(planning_file)
+    l1_str = f"{config_l1} (depuis {dt_l1.strftime('%a %d/%m %H:%M') if dt_l1 else '?'})"
+    l2_str = f"{config_l2} (depuis {dt_l2.strftime('%a %d/%m %H:%M') if dt_l2 else '?'})" if config_l2 else "(aucun)"
+    log(f"[PLANNING] {planning_name} — niveau 1 : {l1_str} — niveau 2 : {l2_str}")
+
+    # Verbosity 2 : tous les candidats (déjà géré dans select_config_for_level)
+    log(f"[PLANNING] Détail niveau 1 :", 2)
+    select_config_for_level(events, 1, now)
+    if config_l2:
+        log(f"[PLANNING] Détail niveau 2 :", 2)
+        select_config_for_level(events, 2, now)
 
     return config_l1, config_l2
 
@@ -305,12 +379,16 @@ def load_exception_plannings(now: datetime.datetime) -> dict[int, tuple[str, str
     ]
 
     if not exception_files:
+        log(f"[EXCEPTIONS] Aucun fichier d'exception trouvé.")
         return {}
 
-    log(f"[EXCEPTIONS] {len(exception_files)} fichier(s) trouvé(s) : "
-        f"{[os.path.basename(f) for f in exception_files]}", 1)
+    # Verbosity 0 : juste le nombre de fichiers scannés
+    log(f"[EXCEPTIONS] {len(exception_files)} fichier(s) scanné(s) : "
+        f"{[os.path.basename(f) for f in exception_files]}")
 
     candidates: dict[int, list] = {1: [], 2: []}
+    active_summaries = []
+    ignored_summaries = []
 
     for filepath in exception_files:
         filename = os.path.basename(filepath)
@@ -327,18 +405,49 @@ def load_exception_plannings(now: datetime.datetime) -> dict[int, tuple[str, str
         period_end   = _parse_period_dt(period["end"])
 
         if not (period_start <= now <= period_end):
+            ignored_summaries.append(
+                f"{filename} ({period['start']} → {period['end']})"
+            )
             log(f"[EXCEPTION] '{filename}' hors période "
                 f"({period['start']} → {period['end']}), ignoré.", 1)
             continue
 
-        log(f"[EXCEPTION] '{filename}' ({desc}) — période active "
-            f"({period['start']} → {period['end']})")
-
+        # Fichier actif
+        configs_by_level = {}
         for level in (1, 2):
-            config = select_config_for_level(events, level, now)
+            config, chosen_dt = select_config_for_level_with_dt(events, level, now)
             if config:
                 candidates[level].append((period_start, config, filename))
-                log(f"[EXCEPTION] '{filename}' niveau {level} → config '{config}'", 1)
+                configs_by_level[level] = (config, chosen_dt)
+                log(f"[EXCEPTION] '{filename}' niveau {level} → config '{config}' "
+                    f"(depuis {chosen_dt.strftime('%a %d/%m %H:%M') if chosen_dt else '?'})", 1)
+
+        # Résumé verbosity 0
+        if configs_by_level:
+            parts = []
+            for lvl, (cfg, dt) in sorted(configs_by_level.items()):
+                dt_str = dt.strftime("%d/%m %H:%M") if dt else "?"
+                parts.append(f"niveau {lvl}: {cfg} (depuis {dt_str})")
+            period_str = f"{period_start.strftime('%d/%m %H:%M')} → {period_end.strftime('%d/%m %H:%M')}"
+            active_summaries.append(f"{filename} [{period_str}] → {', '.join(parts)}")
+
+        # Verbosity 2 : détail des événements de l'exception
+        log(f"[EXCEPTION] '{filename}' ({desc}) — événements :", 2)
+        for ev in events:
+            if ev.get("_comment"):
+                continue
+            log(f"  {ev.get('day','?')} {ev.get('time','?')} "
+                f"({ev.get('week','?')}) niv.{ev.get('level','?')} → {ev.get('config','?')}", 2)
+
+    # Verbosity 0 : résumé des actives et ignorées
+    if active_summaries:
+        for summary in active_summaries:
+            log(f"[EXCEPTION] ✓ ACTIVE : {summary}")
+    else:
+        log(f"[EXCEPTION] Aucune exception active.")
+
+    if ignored_summaries:
+        log(f"[EXCEPTION] Ignorées : {', '.join(ignored_summaries)}", 1)
 
     result: dict[int, tuple[str, str, datetime.datetime]] = {}
 
@@ -796,12 +905,10 @@ def main():
     planning_file = args.planning if args.planning else PLANNING_STANDARD
     log(f"[MODE] Planning standard : {planning_file}")
 
-    # 1. Résoudre le planning standard
+    # 1. Résoudre le planning standard (affiche résumé verbosity 0)
     config_name_l1, config_name_l2 = resolve_configs(planning_file, sim_now)
-    log(f"[INFO] Standard — niveau 1 : {config_name_l1}")
-    log(f"[INFO] Standard — niveau 2 : {config_name_l2 or '(aucun)'}")
 
-    # 2. Chercher les exceptions actives
+    # 2. Chercher les exceptions actives (affiche résumé verbosity 0)
     exceptions = load_exception_plannings(sim_now)
 
     # 3. Appliquer les exceptions par-dessus le standard
@@ -809,8 +916,8 @@ def main():
     final_l1_source = "standard"
     if 1 in exceptions:
         exc_config, exc_file, exc_start = exceptions[1]
-        log(f"[INFO] Exception active (niveau 1) : '{exc_file}' → config '{exc_config}' "
-            f"(depuis {exc_start.strftime('%d/%m/%Y %H:%M')})")
+        log(f"[PLANNING] Exception niveau 1 retenue : '{exc_config}' "
+            f"(remplace '{config_name_l1}' du standard)")
         final_l1_name   = exc_config
         final_l1_source = exc_file
 
@@ -818,8 +925,8 @@ def main():
     final_l2_source = "standard"
     if 2 in exceptions:
         exc_config, exc_file, exc_start = exceptions[2]
-        log(f"[INFO] Exception active (niveau 2) : '{exc_file}' → config '{exc_config}' "
-            f"(depuis {exc_start.strftime('%d/%m/%Y %H:%M')})")
+        log(f"[PLANNING] Exception niveau 2 retenue : '{exc_config}' "
+            f"(remplace '{config_name_l2 or '(aucun)'}' du standard)")
         final_l2_name   = exc_config
         final_l2_source = exc_file
 
