@@ -82,7 +82,7 @@ case "$CONTEXT" in
         SCHEDULES_TMPL="/schedules.tmpl"
         TOKEN_FILE="/data/tado_refresh_token"
         PYTHON="python3"
-        SCRIPT="/tado_planning.py"
+        SCRIPT="/tado-planning.py"
         ;;
     mac)
         SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -90,7 +90,7 @@ case "$CONTEXT" in
         SCHEDULES_TMPL="$SCRIPT_DIR/schedules.tmpl"
         TOKEN_FILE="$SCRIPT_DIR/tado_refresh_token"
         PYTHON=$(which python3.11 2>/dev/null || which python3)
-        SCRIPT="$SCRIPT_DIR/tado_planning.py"
+        SCRIPT="$SCRIPT_DIR/tado-planning.py"
         VERBOSITY=0
         ;;
 esac
