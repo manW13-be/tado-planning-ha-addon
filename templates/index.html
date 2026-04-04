@@ -1,0 +1,1431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Tado Planning — Configuration</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #f7f6f3;
+      --surface:   #ffffff;
+      --surface2:  #f0efe9;
+      --border:    #e2e0d8;
+      --border2:   #d0cec4;
+      --text:      #1a1916;
+      --text2:     #6b6960;
+      --text3:     #9e9c94;
+      --accent:    #2a5bd7;
+      --accent-bg: #eef2fd;
+      --green:     #1a7a4a;
+      --green-bg:  #e8f5ee;
+      --amber:     #a05c00;
+      --amber-bg:  #fdf3e3;
+      --red:       #c0392b;
+      --red-bg:    #fdecea;
+      --radius:    6px;
+      --radius-lg: 10px;
+      --shadow:    0 1px 3px rgba(0,0,0,.07), 0 1px 2px rgba(0,0,0,.05);
+      --shadow-md: 0 4px 12px rgba(0,0,0,.08), 0 1px 3px rgba(0,0,0,.06);
+    }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    /* ── LAYOUT ── */
+    .app { display: flex; min-height: 100vh; }
+
+    .sidebar {
+      width: 220px;
+      flex-shrink: 0;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      position: fixed;
+      top: 0; left: 0; bottom: 0;
+      z-index: 10;
+    }
+
+    .sidebar-header {
+      padding: 20px 18px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .sidebar-header .logo {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 2px;
+    }
+    .sidebar-header h1 {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1.3;
+    }
+
+    nav { padding: 10px 8px; flex: 1; }
+    .nav-section {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--text3);
+      padding: 10px 10px 4px;
+    }
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 10px;
+      border-radius: var(--radius);
+      cursor: pointer;
+      color: var(--text2);
+      font-size: 13.5px;
+      font-weight: 400;
+      transition: background .12s, color .12s;
+      user-select: none;
+    }
+    .nav-item:hover { background: var(--surface2); color: var(--text); }
+    .nav-item.active { background: var(--accent-bg); color: var(--accent); font-weight: 500; }
+    .nav-item svg { flex-shrink: 0; opacity: .7; }
+    .nav-item.active svg { opacity: 1; }
+
+    .sidebar-footer {
+      padding: 12px 18px;
+      border-top: 1px solid var(--border);
+    }
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: var(--text3);
+    }
+    .status-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--border2);
+    }
+    .status-dot.ok { background: var(--green); }
+
+    .main {
+      margin-left: 220px;
+      flex: 1;
+      padding: 32px 36px;
+      max-width: 960px;
+    }
+
+    /* ── SECTIONS ── */
+    .section { display: none; }
+    .section.active { display: block; }
+
+    .page-header { margin-bottom: 24px; }
+    .page-header h2 {
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+    .page-header p { color: var(--text2); font-size: 13px; }
+
+    /* ── CARDS ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow);
+      margin-bottom: 16px;
+    }
+    .card-header {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .card-header h3 {
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .card-body { padding: 16px 18px; }
+
+    /* ── STATUS SECTION ── */
+    .status-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .status-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 16px 18px;
+      box-shadow: var(--shadow);
+    }
+    .status-card .label {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: .07em;
+      text-transform: uppercase;
+      color: var(--text3);
+      margin-bottom: 6px;
+    }
+    .status-card .value {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .status-card .sub {
+      font-size: 12px;
+      color: var(--text2);
+      margin-top: 2px;
+      font-family: 'DM Mono', monospace;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-size: 11.5px;
+      font-weight: 500;
+      font-family: 'DM Mono', monospace;
+    }
+    .badge-green { background: var(--green-bg); color: var(--green); }
+    .badge-amber { background: var(--amber-bg); color: var(--amber); }
+    .badge-blue  { background: var(--accent-bg); color: var(--accent); }
+    .badge-gray  { background: var(--surface2); color: var(--text2); }
+
+    .exception-item {
+      background: var(--amber-bg);
+      border: 1px solid #f5d89a;
+      border-radius: var(--radius);
+      padding: 10px 14px;
+      margin-bottom: 8px;
+    }
+    .exception-item .exc-name {
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--amber);
+    }
+    .exception-item .exc-period {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: var(--text2);
+      margin-top: 2px;
+    }
+
+    /* ── LIST ── */
+    .item-list { display: flex; flex-direction: column; gap: 2px; }
+    .item-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: background .1s;
+    }
+    .item-row:hover { background: var(--surface2); }
+    .item-row.selected { background: var(--accent-bg); }
+    .item-row .item-name {
+      font-size: 13.5px;
+      font-weight: 500;
+      font-family: 'DM Mono', monospace;
+    }
+    .item-row .item-meta { font-size: 12px; color: var(--text3); }
+
+    /* ── BUTTONS ── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: var(--radius);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: background .12s, box-shadow .12s, border-color .12s;
+      white-space: nowrap;
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    .btn-primary:hover { background: #2251c5; }
+    .btn-secondary {
+      background: var(--surface);
+      color: var(--text);
+      border-color: var(--border2);
+    }
+    .btn-secondary:hover { background: var(--surface2); border-color: var(--border2); }
+    .btn-danger {
+      background: var(--surface);
+      color: var(--red);
+      border-color: #f0b8b2;
+    }
+    .btn-danger:hover { background: var(--red-bg); }
+    .btn-sm { padding: 4px 10px; font-size: 12px; }
+    .btn-group { display: flex; gap: 6px; }
+
+    /* ── EDITOR LAYOUT ── */
+    .editor-layout {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      gap: 16px;
+      align-items: start;
+    }
+    .editor-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .editor-panel-header {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .editor-panel-header span {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text2);
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      font-family: 'DM Mono', monospace;
+    }
+
+    /* ── FORM ── */
+    .form-group { margin-bottom: 14px; }
+    .form-label {
+      display: block;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text2);
+      margin-bottom: 5px;
+      font-family: 'DM Mono', monospace;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+    }
+    .form-input, .form-select {
+      width: 100%;
+      padding: 7px 10px;
+      border: 1px solid var(--border2);
+      border-radius: var(--radius);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 13.5px;
+      color: var(--text);
+      background: var(--surface);
+      transition: border-color .15s, box-shadow .15s;
+      appearance: none;
+    }
+    .form-input:focus, .form-select:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(42,91,215,.1);
+    }
+    .form-select {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b6960' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      padding-right: 30px;
+    }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+
+    /* ── TABLE / SCHEDULE GRID ── */
+    .schedule-table { width: 100%; border-collapse: collapse; }
+    .schedule-table th {
+      text-align: left;
+      font-family: 'DM Mono', monospace;
+      font-size: 10.5px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--text3);
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .schedule-table td {
+      padding: 7px 10px;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+      vertical-align: middle;
+    }
+    .schedule-table tr:last-child td { border-bottom: none; }
+    .schedule-table tr:hover td { background: var(--surface2); }
+    .schedule-table td code {
+      font-family: 'DM Mono', monospace;
+      font-size: 12px;
+      background: var(--surface2);
+      padding: 1px 6px;
+      border-radius: 4px;
+    }
+
+    /* ── ZONE SLOTS ── */
+    .zone-section { margin-bottom: 20px; }
+    .zone-section-title {
+      font-size: 12px;
+      font-weight: 600;
+      font-family: 'DM Mono', monospace;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--text3);
+      padding: 10px 0 6px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .slot-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .slot-row:last-child { border-bottom: none; }
+    .slot-time {
+      font-family: 'DM Mono', monospace;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text);
+      width: 52px;
+    }
+    .slot-temp {
+      font-family: 'DM Mono', monospace;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--accent);
+      width: 52px;
+    }
+    .slot-input {
+      width: 70px;
+      padding: 3px 7px;
+      border: 1px solid var(--border2);
+      border-radius: 4px;
+      font-family: 'DM Mono', monospace;
+      font-size: 12px;
+      color: var(--text);
+      background: var(--surface);
+    }
+    .slot-input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(42,91,215,.1);
+    }
+    .slot-del {
+      background: none;
+      border: none;
+      color: var(--text3);
+      cursor: pointer;
+      padding: 2px 4px;
+      border-radius: 4px;
+      line-height: 1;
+      font-size: 14px;
+      transition: color .1s, background .1s;
+    }
+    .slot-del:hover { color: var(--red); background: var(--red-bg); }
+
+    /* ── TABS ── */
+    .tabs {
+      display: flex;
+      gap: 2px;
+      background: var(--surface2);
+      padding: 3px;
+      border-radius: var(--radius);
+      margin-bottom: 16px;
+      width: fit-content;
+    }
+    .tab {
+      padding: 5px 14px;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      color: var(--text2);
+      transition: background .1s, color .1s;
+    }
+    .tab.active {
+      background: var(--surface);
+      color: var(--text);
+      box-shadow: var(--shadow);
+    }
+
+    /* ── TOAST ── */
+    #toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: var(--text);
+      color: #fff;
+      padding: 10px 16px;
+      border-radius: var(--radius);
+      font-size: 13px;
+      font-weight: 500;
+      box-shadow: var(--shadow-md);
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity .2s, transform .2s;
+      pointer-events: none;
+      z-index: 100;
+    }
+    #toast.show { opacity: 1; transform: translateY(0); }
+    #toast.success { background: var(--green); }
+    #toast.error   { background: var(--red); }
+
+    /* ── EMPTY STATE ── */
+    .empty {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--text3);
+    }
+    .empty svg { margin-bottom: 10px; opacity: .4; }
+    .empty p { font-size: 13px; }
+
+    /* ── DIVIDER ── */
+    .divider { height: 1px; background: var(--border); margin: 16px 0; }
+
+    /* ── MODAL ── */
+    .modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.35);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 50;
+      opacity: 0; pointer-events: none;
+      transition: opacity .2s;
+    }
+    .modal-overlay.open { opacity: 1; pointer-events: all; }
+    .modal {
+      background: var(--surface);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-md);
+      width: 440px;
+      max-width: 95vw;
+      padding: 24px;
+      transform: translateY(10px);
+      transition: transform .2s;
+    }
+    .modal-overlay.open .modal { transform: translateY(0); }
+    .modal h3 { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
+    .modal-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+
+    /* ── PLANNING EVENT TABLE ── */
+    .event-add-row {
+      background: var(--surface2);
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      margin-bottom: 12px;
+    }
+
+    /* ── LOADING ── */
+    .spinner {
+      display: inline-block;
+      width: 14px; height: 14px;
+      border: 2px solid var(--border2);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .6s linear infinite;
+      vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .loading-placeholder {
+      height: 80px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text3);
+      font-size: 13px;
+      gap: 8px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="logo">Tado Planning</div>
+      <h1>Configuration</h1>
+    </div>
+    <nav>
+      <div class="nav-section">Overview</div>
+      <div class="nav-item active" onclick="showSection('status')">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Active status
+      </div>
+      <div class="nav-section">Configuration</div>
+      <div class="nav-item" onclick="showSection('weekconfigs')">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        Weekconfigs
+      </div>
+      <div class="nav-item" onclick="showSection('planning')">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        Planning
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="status-pill">
+        <div class="status-dot" id="conn-dot"></div>
+        <span id="conn-label">Connecting…</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- ── STATUS ── -->
+    <section class="section active" id="sec-status">
+      <div class="page-header">
+        <h2>Active status</h2>
+        <p>Configuration currently applied by tado_planning.py</p>
+      </div>
+      <div id="status-content">
+        <div class="loading-placeholder"><span class="spinner"></span> Loading…</div>
+      </div>
+    </section>
+
+    <!-- ── WEEKCONFIGS ── -->
+    <section class="section" id="sec-weekconfigs">
+      <div class="page-header">
+        <h2>Weekconfigs</h2>
+        <p>Weekly configuration files — temperatures per zone and time slot</p>
+      </div>
+      <div class="editor-layout">
+        <div class="editor-panel">
+          <div class="editor-panel-header">
+            <span>Files</span>
+            <button class="btn btn-primary btn-sm" onclick="newWeekconfig()">+ New</button>
+          </div>
+          <div id="weekconfig-list" class="item-list" style="padding:6px 6px;">
+            <div class="loading-placeholder"><span class="spinner"></span></div>
+          </div>
+        </div>
+        <div>
+          <div id="weekconfig-editor">
+            <div class="empty">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              <p>Select a file to edit</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── PLANNING ── -->
+    <section class="section" id="sec-planning">
+      <div class="page-header">
+        <h2>Planning</h2>
+        <p>Standard planning and exception overrides — odd/even week cycle</p>
+      </div>
+      <div class="editor-layout">
+        <div class="editor-panel">
+          <div class="editor-panel-header">
+            <span>Files</span>
+            <button class="btn btn-primary btn-sm" onclick="newException()">+ New</button>
+          </div>
+          <div id="planning-list" class="item-list" style="padding:6px 6px;">
+            <div class="loading-placeholder"><span class="spinner"></span></div>
+          </div>
+        </div>
+        <div>
+          <div id="planning-editor">
+            <div class="empty">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              <p>Select a planning to edit</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- MODAL — New weekconfig -->
+<div class="modal-overlay" id="modal-new-wc">
+  <div class="modal">
+    <h3>New weekconfig</h3>
+    <div class="form-group">
+      <label class="form-label">File name</label>
+      <input class="form-input" id="new-wc-name" placeholder="e.g. standard, holidays, kids…" />
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-new-wc')">Cancel</button>
+      <button class="btn btn-primary" onclick="createWeekconfig()">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL — New exception -->
+<div class="modal-overlay" id="modal-new-exc">
+  <div class="modal">
+    <h3>New exception</h3>
+    <div class="form-group">
+      <label class="form-label">Name (slug)</label>
+      <input class="form-input" id="new-exc-name" placeholder="e.g. xmas2026, easter_holidays…" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Description</label>
+      <input class="form-input" id="new-exc-desc" placeholder="e.g. Christmas holidays 2026" />
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Start</label>
+        <input class="form-input" type="datetime-local" id="new-exc-start" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">End</label>
+        <input class="form-input" type="datetime-local" id="new-exc-end" />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-new-exc')">Cancel</button>
+      <button class="btn btn-primary" onclick="createException()">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<script>
+// ─────────────────────────────────────────────
+// GLOBALS
+// ─────────────────────────────────────────────
+let allZones = [];
+let currentWeekconfig = null;
+let currentWeekconfigs = {};
+let currentPlanningName = null;   // 'standard' or exception file name
+let currentPlanningData = null;   // full JSON object
+let currentPlanningEvents = [];   // events array (ref into currentPlanningData)
+
+// ─────────────────────────────────────────────
+// NAV
+// ─────────────────────────────────────────────
+function showSection(id) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('sec-' + id).classList.add('active');
+  event.currentTarget.classList.add('active');
+  if (id === 'status')      loadStatus();
+  if (id === 'weekconfigs') loadWeekconfigs();
+  if (id === 'planning')    loadPlanningList();
+}
+
+// ─────────────────────────────────────────────
+// TOAST
+// ─────────────────────────────────────────────
+let toastTimer;
+function toast(msg, type = '') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show ' + type;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.className = '', 2500);
+}
+
+// ─────────────────────────────────────────────
+// MODAL
+// ─────────────────────────────────────────────
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-overlay').forEach(m => {
+  m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); });
+});
+
+// ─────────────────────────────────────────────
+// STATUS
+// ─────────────────────────────────────────────
+async function loadStatus() {
+  const el = document.getElementById('status-content');
+  el.innerHTML = '<div class="loading-placeholder"><span class="spinner"></span> Loading…</div>';
+  try {
+    const r = await fetch('/api/status');
+    const d = await r.json();
+    if (d.error) { el.innerHTML = `<div class="empty"><p>Error: ${d.error}</p></div>`; return; }
+
+    document.getElementById('conn-dot').className = 'status-dot ok';
+    document.getElementById('conn-label').textContent = 'Connected';
+
+    const parityBadge = d.parity === 'odd'
+      ? `<span class="badge badge-blue">Odd week</span>`
+      : `<span class="badge badge-green">Even week</span>`;
+
+    const l1 = d.level1 ? `<div class="status-card">
+      <div class="label">Level 1 — active config</div>
+      <div class="value"><code style="font-family:DM Mono,monospace;font-size:14px">${d.level1.config}</code></div>
+      <div class="sub">since ${d.level1.since}</div>
+    </div>` : `<div class="status-card"><div class="label">Level 1</div><div class="value" style="color:var(--text3)">—</div></div>`;
+
+    const l2 = d.level2 ? `<div class="status-card">
+      <div class="label">Level 2 — active config</div>
+      <div class="value"><code style="font-family:DM Mono,monospace;font-size:14px">${d.level2.config}</code></div>
+      <div class="sub">since ${d.level2.since}</div>
+    </div>` : `<div class="status-card"><div class="label">Level 2</div><div class="value" style="color:var(--text3)">—</div></div>`;
+
+    let excHtml = '';
+    if (d.exceptions && d.exceptions.length > 0) {
+      excHtml = d.exceptions.map(e => `
+        <div class="exception-item">
+          <div class="exc-name">⚠ ${e.description}</div>
+          <div class="exc-period">${e.period}</div>
+        </div>`).join('');
+    } else {
+      excHtml = `<div style="color:var(--text3);font-size:13px">No active exceptions</div>`;
+    }
+
+    el.innerHTML = `
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-body" style="display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <div style="font-size:13px;color:var(--text2);margin-bottom:4px">${d.now}</div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="font-family:DM Mono,monospace;font-size:13px">ISO week <strong>${d.iso_week}</strong></span>
+              ${parityBadge}
+            </div>
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="loadStatus()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            Refresh
+          </button>
+        </div>
+      </div>
+      <div class="status-grid">${l1}${l2}</div>
+      <div class="card">
+        <div class="card-header"><h3>Active exceptions</h3></div>
+        <div class="card-body">${excHtml}</div>
+      </div>`;
+  } catch(e) {
+    el.innerHTML = `<div class="empty"><p>Connection error: ${e.message}</p></div>`;
+    document.getElementById('conn-label').textContent = 'Offline';
+  }
+}
+
+// ─────────────────────────────────────────────
+// WEEKCONFIGS
+// ─────────────────────────────────────────────
+async function loadWeekconfigs() {
+  const listEl = document.getElementById('weekconfig-list');
+  listEl.innerHTML = '<div class="loading-placeholder"><span class="spinner"></span></div>';
+  try {
+    const r = await fetch('/api/configs');
+    const d = await r.json();
+    if (!d.configs.length) {
+      listEl.innerHTML = '<div class="empty"><p>No files</p></div>';
+      return;
+    }
+    listEl.innerHTML = d.configs.map(c => `
+      <div class="item-row" id="wc-row-${c}" onclick="selectWeekconfig('${c}')">
+        <span class="item-name">${c}</span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text3)"><polyline points="9 18 15 12 9 6"/></svg>
+      </div>`).join('');
+  } catch(e) { listEl.innerHTML = `<div class="empty"><p>Error</p></div>`; }
+}
+
+async function selectWeekconfig(name) {
+  document.querySelectorAll('[id^="wc-row-"]').forEach(r => r.classList.remove('selected'));
+  const row = document.getElementById('wc-row-' + name);
+  if (row) row.classList.add('selected');
+  currentWeekconfig = name;
+
+  const edEl = document.getElementById('weekconfig-editor');
+  edEl.innerHTML = '<div class="loading-placeholder"><span class="spinner"></span> Loading…</div>';
+
+  if (!allZones.length) {
+    try {
+      const r = await fetch('/api/zones');
+      const d = await r.json();
+      allZones = d.zones || [];
+    } catch(e) {}
+  }
+
+  try {
+    const r = await fetch(`/api/configs/${name}`);
+    const data = await r.json();
+    currentWeekconfigs[name] = data;
+    renderWCEditor(name, data);
+  } catch(e) { edEl.innerHTML = `<div class="empty"><p>Load error</p></div>`; }
+}
+
+// ── Weekconfig helpers ──────────────────────────────────────────────────────
+
+const TIMETABLES = ['Mon-Sun', 'Mon-Fri, Sat, Sun', 'Mon, ..., Sun'];
+const TIMETABLE_LABELS = {
+  'Mon-Sun':          'Mon–Sun (same every day)',
+  'Mon-Fri, Sat, Sun':'Mon–Fri + Sat + Sun',
+  'Mon, ..., Sun':    'Mon, Tue, … Sun (7 independent days)',
+};
+const TIMETABLE_KEYS = {
+  'Mon-Sun':           ['Mon-Sun'],
+  'Mon-Fri, Sat, Sun': ['Mon-Fri', 'Sat', 'Sun'],
+  'Mon, ..., Sun':     ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+};
+const TIMETABLE_KEY_LABELS = {
+  'Mon-Sun': 'Mon → Sun', 'Mon-Fri': 'Mon → Fri',
+  'Sat': 'Sat', 'Sun': 'Sun',
+  'Mon': 'Mon', 'Tue': 'Tue', 'Wed': 'Wed',
+  'Thu': 'Thu', 'Fri': 'Fri',
+};
+const PREHEAT_OPTS  = ['off', 'eco', 'balance', 'comfort'];
+const ALL_DAY_KEYS  = ['Mon-Sun','Mon-Fri','Sat','Sun','Mon','Tue','Wed','Thu','Fri'];
+
+function wcData(name) { return currentWeekconfigs[name]; }
+
+function renderSlots(slots, cfg, zone, dayKey) {
+  if (!slots || !slots.length) return `<div style="color:var(--text3);font-size:12px;padding:4px 0">No slots</div>`;
+  return slots.map((s, i) => `
+    <div class="slot-row">
+      <input class="slot-input" value="${s.start}" placeholder="HH:MM"
+        onchange="updateSlotField('${cfg}','${zone}','${dayKey}',${i},'start',this.value)" style="width:64px">
+      <input class="slot-input" value="${s.temp}" type="number" step="0.5" min="5" max="25"
+        onchange="updateSlotField('${cfg}','${zone}','${dayKey}',${i},'temp',parseFloat(this.value))" style="width:58px">
+      <span style="font-size:11px;color:var(--text3)">°C</span>
+      <button class="slot-del" onclick="deleteSlotField('${cfg}','${zone}','${dayKey}',${i})">×</button>
+    </div>`).join('');
+}
+
+function slotsBlock(cfg, zone, dayKey) {
+  const zd = wcData(cfg)[zone];
+  const slots = zd[dayKey] || [];
+  const label = TIMETABLE_KEY_LABELS[dayKey] || dayKey;
+  return `
+    <div style="margin-bottom:12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+        <span style="font-size:11px;font-weight:600;font-family:DM Mono,monospace;text-transform:uppercase;letter-spacing:.05em;color:var(--text2)">${label}</span>
+        <button class="btn btn-secondary btn-sm" style="padding:2px 8px;font-size:11px" onclick="addSlotField('${cfg}','${zone}','${dayKey}')">+ Slot</button>
+      </div>
+      <div id="slots-${cfg}-${zone}-${dayKey}">${renderSlots(slots, cfg, zone, dayKey)}</div>
+    </div>`;
+}
+
+function renderZoneEditor(cfg, zone) {
+  const zd = wcData(cfg)[zone];
+  const tt = zd.timetable || 'Mon-Sun';
+  const ttOpts = TIMETABLES.map(t =>
+    `<option value="${t}" ${t===tt?'selected':''}>${TIMETABLE_LABELS[t]}</option>`
+  ).join('');
+  const phOpts = PREHEAT_OPTS.map(p =>
+    `<option value="${p}" ${(zd.preheat||'off')===p?'selected':''}>${p}</option>`
+  ).join('');
+
+  const keys = TIMETABLE_KEYS[tt] || ['Mon-Sun'];
+  const slotsHtml = keys.map(k => slotsBlock(cfg, zone, k)).join('');
+
+  return `
+    <div class="zone-section" id="zoneed-${cfg}-${zone}">
+      <div class="zone-section-title"><span>${zone}</span></div>
+
+      <div class="form-row" style="margin-bottom:10px">
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Away temp (°C)</label>
+          <input class="form-input" type="number" step="0.5" min="5" max="21"
+            value="${zd.away_temp ?? 15}"
+            onchange="updateZoneMeta('${cfg}','${zone}','away_temp',parseFloat(this.value))">
+        </div>
+        <div class="form-group" style="margin:0;display:flex;flex-direction:column;justify-content:flex-end">
+          <label class="form-label">Away enabled</label>
+          <label style="display:flex;align-items:center;gap:8px;padding:7px 0;cursor:pointer">
+            <input type="checkbox" ${zd.away_enabled?'checked':''} style="width:14px;height:14px;accent-color:var(--accent)"
+              onchange="updateZoneMeta('${cfg}','${zone}','away_enabled',this.checked)">
+            <span style="font-size:13px">${zd.away_enabled ? 'Yes' : 'No'}</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="form-row" style="margin-bottom:12px">
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Preheat (away)</label>
+          <select class="form-select" onchange="updateZoneMeta('${cfg}','${zone}','preheat',this.value)">${phOpts}</select>
+        </div>
+        <div class="form-group" style="margin:0"></div>
+      </div>
+
+      <div style="margin-bottom:14px">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" ${zd.early_start?'checked':''} style="width:14px;height:14px;accent-color:var(--accent)"
+            onchange="updateZoneMeta('${cfg}','${zone}','early_start',this.checked)">
+          <span style="font-size:13px">Early start</span>
+        </label>
+      </div>
+
+      <div class="form-group" style="margin-bottom:14px">
+        <label class="form-label">Timetable type</label>
+        <select class="form-select" onchange="changeZoneTimetable('${cfg}','${zone}',this.value)">${ttOpts}</select>
+      </div>
+
+      <div style="background:var(--surface2);border-radius:var(--radius);padding:10px 12px">
+        ${slotsHtml}
+      </div>
+    </div>`;
+}
+
+
+function renderWCEditor(name, data) {
+  const edEl = document.getElementById('weekconfig-editor');
+
+  // Filtrer les clés qui ne sont pas des zones (commençant par _)
+  const zoneKeys = Object.keys(data).filter(k => !k.startsWith('_'));
+
+  if (!zoneKeys.length) {
+    edEl.innerHTML = `<div class="card"><div class="card-body"><div class="empty"><p>No zones in this file</p></div></div></div>`;
+    return;
+  }
+
+  // Initialiser les clés manquantes selon le timetable
+  zoneKeys.forEach(zone => {
+    const zd = data[zone];
+    const tt = zd.timetable || 'Mon-Sun';
+    const keys = TIMETABLE_KEYS[tt] || ['Mon-Sun'];
+    keys.forEach(k => { if (!zd[k]) zd[k] = []; });
+    // Nettoyer les clés qui n'appartiennent pas au timetable courant
+    ALL_DAY_KEYS.filter(k => !keys.includes(k)).forEach(k => { delete zd[k]; });
+  });
+
+  const zonesHtml = zoneKeys.map(z => renderZoneEditor(name, z)).join('<div class="divider"></div>');
+
+  edEl.innerHTML = `
+    <div class="card">
+      <div class="card-header">
+        <h3 style="font-family:DM Mono,monospace">${name}.json</h3>
+        <div class="btn-group">
+          <button class="btn btn-danger btn-sm" onclick="deleteWeekconfig('${name}')">Delete</button>
+          <button class="btn btn-primary btn-sm" onclick="saveWeekconfig('${name}')">Save</button>
+        </div>
+      </div>
+      <div class="card-body">${zonesHtml}</div>
+    </div>`;
+}
+
+function updateSlotField(cfg, zone, dayKey, idx, field, val) {
+  wcData(cfg)[zone][dayKey][idx][field] = val;
+}
+
+function deleteSlotField(cfg, zone, dayKey, idx) {
+  wcData(cfg)[zone][dayKey].splice(idx, 1);
+  // Re-render juste les slots de ce bloc
+  const el = document.getElementById(`slots-${cfg}-${zone}-${dayKey}`);
+  if (el) el.innerHTML = renderSlots(wcData(cfg)[zone][dayKey], cfg, zone, dayKey);
+}
+
+function addSlotField(cfg, zone, dayKey) {
+  if (!wcData(cfg)[zone][dayKey]) wcData(cfg)[zone][dayKey] = [];
+  const existing = wcData(cfg)[zone][dayKey];
+  const lastTime = existing.length ? existing[existing.length-1].start : '07:00';
+  wcData(cfg)[zone][dayKey].push({ start: lastTime, temp: 19 });
+  const el = document.getElementById(`slots-${cfg}-${zone}-${dayKey}`);
+  if (el) el.innerHTML = renderSlots(wcData(cfg)[zone][dayKey], cfg, zone, dayKey);
+}
+
+function updateZoneMeta(cfg, zone, field, val) {
+  wcData(cfg)[zone][field] = val;
+}
+
+function changeZoneTimetable(cfg, zone, newTT) {
+  const zd    = wcData(cfg)[zone];
+  const oldTT = zd.timetable || 'Mon-Sun';
+  if (oldTT === newTT) return;
+
+  const cp = k => JSON.parse(JSON.stringify(zd[k] || []));
+
+  // Migration selon tableau de règles
+  if (oldTT === 'Mon-Sun') {
+    if (newTT === 'Mon-Fri, Sat, Sun') {
+      zd['Mon-Fri'] = cp('Mon-Sun');
+      zd['Sat']     = cp('Mon-Sun');
+      zd['Sun']     = cp('Mon-Sun');
+    } else if (newTT === 'Mon, ..., Sun') {
+      ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].forEach(k => { zd[k] = cp('Mon-Sun'); });
+    }
+  } else if (oldTT === 'Mon-Fri, Sat, Sun') {
+    if (newTT === 'Mon-Sun') {
+      zd['Mon-Sun'] = cp('Mon-Fri');
+    } else if (newTT === 'Mon, ..., Sun') {
+      ['Mon','Tue','Wed','Thu','Fri'].forEach(k => { zd[k] = cp('Mon-Fri'); });
+      zd['Sat'] = cp('Sat');
+      zd['Sun'] = cp('Sun');
+    }
+  } else if (oldTT === 'Mon, ..., Sun') {
+    if (newTT === 'Mon-Sun') {
+      zd['Mon-Sun'] = cp('Mon');
+    } else if (newTT === 'Mon-Fri, Sat, Sun') {
+      zd['Mon-Fri'] = cp('Mon');
+      // Sat et Sun restent tels quels
+    }
+  }
+
+  // Nettoyer les clés de l'ancien timetable
+  const oldKeys = TIMETABLE_KEYS[oldTT] || [];
+  const newKeys = TIMETABLE_KEYS[newTT] || [];
+  oldKeys.filter(k => !newKeys.includes(k)).forEach(k => delete zd[k]);
+
+  zd.timetable = newTT;
+  const el = document.getElementById(`zoneed-${cfg}-${zone}`);
+  if (el) el.outerHTML = renderZoneEditor(cfg, zone);
+}
+
+async function saveWeekconfig(name) {
+  try {
+    const r = await fetch(`/api/configs/${name}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(currentWeekconfigs[name])
+    });
+    const d = await r.json();
+    if (d.ok) toast(`${name}.json saved`, 'success');
+    else toast('Save error', 'error');
+  } catch(e) { toast('Network error', 'error'); }
+}
+
+async function deleteWeekconfig(name) {
+  if (!confirm(`Delete ${name}.json?`)) return;
+  await fetch(`/api/configs/${name}`, { method: 'DELETE' });
+  currentWeekconfig = null;
+  document.getElementById('weekconfig-editor').innerHTML = `<div class="empty"><p>File deleted</p></div>`;
+  loadWeekconfigs();
+  toast(`${name}.json deleted`);
+}
+
+function newWeekconfig() { openModal('modal-new-wc'); document.getElementById('new-wc-name').value = ''; }
+async function createWeekconfig() {
+  const name = document.getElementById('new-wc-name').value.trim().replace(/[^a-z0-9_-]/gi, '_');
+  if (!name) return;
+  if (!allZones.length) {
+    try { const r = await fetch('/api/zones'); const d = await r.json(); allZones = d.zones || []; } catch(e) {}
+  }
+  const empty = {};
+  allZones.forEach(z => {
+    empty[z.name] = { timetable: 'Mon-Sun', 'Mon-Sun': [], away_temp: 15.0, away_enabled: false, preheat: 'off', early_start: false };
+  });
+  await fetch(`/api/configs/${name}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(empty) });
+  closeModal('modal-new-wc');
+  await loadWeekconfigs();
+  selectWeekconfig(name);
+  toast(`${name}.json created`, 'success');
+}
+
+// ─────────────────────────────────────────────
+// PLANNING (standard + exceptions unified)
+// ─────────────────────────────────────────────
+
+async function loadPlanningList() {
+  const el = document.getElementById('planning-list');
+  el.innerHTML = '<div class="loading-placeholder"><span class="spinner"></span></div>';
+  try {
+    const [sr, er] = await Promise.all([
+      fetch('/api/planning/standard'),
+      fetch('/api/planning/exceptions')
+    ]);
+    const stdData = await sr.json();
+    const excData = await er.json();
+
+    let html = '';
+
+    // Standard planning — always first, no delete
+    html += `<div class="item-row" id="plan-row-standard" onclick="selectPlanning('standard')">
+      <div style="min-width:0">
+        <div class="item-name" style="font-size:12.5px">Standard</div>
+        <div style="font-family:DM Mono,monospace;font-size:10px;color:var(--text3);margin-top:1px">planning_standard.json</div>
+      </div>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text3);flex-shrink:0"><polyline points="9 18 15 12 9 6"/></svg>
+    </div>`;
+
+    // Divider between standard and exceptions
+    if (excData.exceptions?.length) {
+      html += `<div style="height:1px;background:var(--border);margin:4px 0"></div>`;
+      html += excData.exceptions.map(e => {
+        const ps = e.period?.start ?? '?';
+        const pe = e.period?.end   ?? '?';
+        return `<div class="item-row" id="plan-row-${e.name}" onclick="selectPlanning('${e.name}')">
+          <div style="min-width:0">
+            <div class="item-name" style="font-size:12.5px">${e.description}</div>
+            <div style="font-family:DM Mono,monospace;font-size:10px;color:var(--text3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${ps} → ${pe}</div>
+          </div>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text3);flex-shrink:0"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>`;
+      }).join('');
+    }
+
+    el.innerHTML = html;
+  } catch(e) { el.innerHTML = `<div class="empty"><p>Error</p></div>`; }
+}
+
+async function selectPlanning(name) {
+  document.querySelectorAll('[id^="plan-row-"]').forEach(r => r.classList.remove('selected'));
+  const row = document.getElementById('plan-row-' + name);
+  if (row) row.classList.add('selected');
+  currentPlanningName = name;
+
+  const edEl = document.getElementById('planning-editor');
+  edEl.innerHTML = '<div class="loading-placeholder"><span class="spinner"></span> Loading…</div>';
+
+  try {
+    const url = name === 'standard'
+      ? '/api/planning/standard'
+      : `/api/planning/exceptions/${name}`;
+    const [dr, cr] = await Promise.all([fetch(url), fetch('/api/configs')]);
+    currentPlanningData   = await dr.json();
+    currentPlanningEvents = currentPlanningData.events || [];
+    const configs = (await cr.json()).configs || [];
+    renderPlanningEditor(configs);
+  } catch(e) { edEl.innerHTML = `<div class="empty"><p>Load error</p></div>`; }
+}
+
+function renderPlanningEditor(configs) {
+  const edEl   = document.getElementById('planning-editor');
+  const name   = currentPlanningName;
+  const isStd  = name === 'standard';
+  const data   = currentPlanningData;
+
+  const WEEK_ORDER = { 'both':0,'odd':1,'even':2 };
+  const DAY_ORDER  = { 'monday':0,'tuesday':1,'wednesday':2,'thursday':3,'friday':4,'saturday':5,'sunday':6,
+                       'mon':0,'tue':1,'wed':2,'thu':3,'fri':4,'sat':5,'sun':6 };
+  const DAY_NORM   = { 'monday':'Mon','tuesday':'Tue','wednesday':'Wed','thursday':'Thu',
+                       'friday':'Fri','saturday':'Sat','sunday':'Sun',
+                       'mon':'Mon','tue':'Tue','wed':'Wed','thu':'Thu','fri':'Fri','sat':'Sat','sun':'Sun' };
+
+  const realEvents = currentPlanningEvents
+    .filter(e => e.day && e.time && e.config)
+    .slice()
+    .sort((a, b) => {
+      const wA = WEEK_ORDER[a.week]??0, wB = WEEK_ORDER[b.week]??0;
+      if (wA !== wB) return wA - wB;
+      const dA = DAY_ORDER[a.day?.toLowerCase()]??0, dB = DAY_ORDER[b.day?.toLowerCase()]??0;
+      if (dA !== dB) return dA - dB;
+      return (a.time||'').localeCompare(b.time||'');
+    });
+
+  const eventsHtml = realEvents.length === 0
+    ? `<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:20px">No events</td></tr>`
+    : realEvents.map((e, i) => `
+      <tr>
+        <td><code>${DAY_NORM[e.day?.toLowerCase()] ?? e.day}</code></td>
+        <td><code>${e.time}</code></td>
+        <td><span class="badge ${e.week==='odd'?'badge-blue':e.week==='even'?'badge-green':'badge-gray'}">${e.week ?? 'both'}</span></td>
+        <td><code>${e.config}</code></td>
+        <td><span class="badge badge-gray">L${e.level ?? 1}</span></td>
+        <td style="text-align:right">
+          <button class="btn btn-danger btn-sm" onclick="deletePlanEvent(${i})">Delete</button>
+        </td>
+      </tr>`).join('');
+
+  const configOptions = configs.map(c => `<option value="${c}">${c}</option>`).join('');
+
+  // Meta card: only shown for exceptions (standard has no period/description to edit)
+  const metaCard = isStd ? '' : `
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header"><h3>Details</h3></div>
+      <div class="card-body">
+        <div class="form-group" style="margin-bottom:10px">
+          <label class="form-label">Description</label>
+          <input class="form-input" value="${data._description ?? ''}"
+            onchange="currentPlanningData._description = this.value">
+        </div>
+        <div class="form-row">
+          <div class="form-group" style="margin:0">
+            <label class="form-label">Start</label>
+            <input class="form-input" type="datetime-local"
+              value="${(data.period?.start ?? '').replace(' ','T')}"
+              onchange="currentPlanningData.period.start = this.value.replace('T',' ')">
+          </div>
+          <div class="form-group" style="margin:0">
+            <label class="form-label">End</label>
+            <input class="form-input" type="datetime-local"
+              value="${(data.period?.end ?? '').replace(' ','T')}"
+              onchange="currentPlanningData.period.end = this.value.replace('T',' ')">
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+  const headerTitle = isStd
+    ? `<h3 style="font-family:DM Mono,monospace">planning_standard.json</h3>`
+    : `<h3 style="font-family:DM Mono,monospace">${name}.json</h3>`;
+
+  const deleteBtn = isStd ? '' :
+    `<button class="btn btn-danger btn-sm" onclick="deletePlanFile('${name}')">Delete</button>`;
+
+  edEl.innerHTML = `
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header">
+        ${headerTitle}
+        <div class="btn-group">
+          ${deleteBtn}
+          <button class="btn btn-primary btn-sm" onclick="savePlan()">Save</button>
+        </div>
+      </div>
+    </div>
+
+    ${metaCard}
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header"><h3>Add an event</h3></div>
+      <div class="card-body">
+        <div class="form-row" style="margin-bottom:10px">
+          <div class="form-group" style="margin:0">
+            <label class="form-label">Day</label>
+            <select class="form-select" id="plan-ev-day">
+              <option value="monday">Mon</option><option value="tuesday">Tue</option>
+              <option value="wednesday">Wed</option><option value="thursday">Thu</option>
+              <option value="friday">Fri</option><option value="saturday">Sat</option>
+              <option value="sunday">Sun</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin:0">
+            <label class="form-label">Time</label>
+            <input class="form-input" type="time" id="plan-ev-time" value="00:00" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group" style="margin:0">
+            <label class="form-label">Week</label>
+            <select class="form-select" id="plan-ev-week">
+              <option value="both">Both</option>
+              <option value="odd">Odd</option>
+              <option value="even">Even</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin:0">
+            <label class="form-label">Config</label>
+            <select class="form-select" id="plan-ev-config">${configOptions}</select>
+          </div>
+        </div>
+        <div class="form-row" style="margin-top:10px">
+          <div class="form-group" style="margin:0">
+            <label class="form-label">Level</label>
+            <select class="form-select" id="plan-ev-level">
+              <option value="1">Level 1</option>
+              <option value="2">Level 2</option>
+            </select>
+          </div>
+          <div style="display:flex;align-items:flex-end">
+            <button class="btn btn-primary" onclick="addPlanEvent()" style="width:100%">Add</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h3>Events</h3>
+        <button class="btn btn-primary btn-sm" onclick="savePlan()">Save</button>
+      </div>
+      <div class="card-body" style="padding:0">
+        <table class="schedule-table">
+          <thead><tr><th>Day</th><th>Time</th><th>Week</th><th>Config</th><th>Level</th><th></th></tr></thead>
+          <tbody>${eventsHtml}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+function addPlanEvent() {
+  currentPlanningEvents.push({
+    day:    document.getElementById('plan-ev-day').value,
+    time:   document.getElementById('plan-ev-time').value,
+    week:   document.getElementById('plan-ev-week').value,
+    config: document.getElementById('plan-ev-config').value,
+    level:  parseInt(document.getElementById('plan-ev-level').value)
+  });
+  fetch('/api/configs').then(r => r.json()).then(d => renderPlanningEditor(d.configs || []));
+}
+
+function deletePlanEvent(i) {
+  let count = -1;
+  const idx = currentPlanningEvents.findIndex(e => {
+    if (e.day && e.time && e.config) count++;
+    return count === i;
+  });
+  if (idx !== -1) currentPlanningEvents.splice(idx, 1);
+  fetch('/api/configs').then(r => r.json()).then(d => renderPlanningEditor(d.configs || []));
+}
+
+async function savePlan() {
+  const name  = currentPlanningName;
+  const isStd = name === 'standard';
+  currentPlanningData.events = currentPlanningEvents;
+  const url = isStd
+    ? '/api/planning/standard'
+    : `/api/planning/exceptions/${name}`;
+  const r = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(currentPlanningData)
+  });
+  const d = await r.json();
+  if (d.ok) toast(`${isStd ? 'planning_standard' : name}.json saved`, 'success');
+  else toast('Save error', 'error');
+}
+
+async function deletePlanFile(name) {
+  if (!confirm(`Delete ${name}?`)) return;
+  await fetch(`/api/planning/exceptions/${name}`, { method: 'DELETE' });
+  currentPlanningName   = null;
+  currentPlanningData   = null;
+  currentPlanningEvents = [];
+  document.getElementById('planning-editor').innerHTML = `<div class="empty"><p>File deleted</p></div>`;
+  loadPlanningList();
+  toast('Exception deleted');
+}
+
+function newException() { openModal('modal-new-exc'); }
+async function createException() {
+  const name  = document.getElementById('new-exc-name').value.trim().replace(/[^a-z0-9_-]/gi, '_');
+  const desc  = document.getElementById('new-exc-desc').value.trim();
+  const start = document.getElementById('new-exc-start').value.replace('T', ' ');
+  const end   = document.getElementById('new-exc-end').value.replace('T', ' ');
+  if (!name || !start || !end) { toast('Required fields missing', 'error'); return; }
+  const obj = { _description: desc || name, period: { start, end }, events: [] };
+  await fetch(`/api/planning/exceptions/planning_${name}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(obj)
+  });
+  closeModal('modal-new-exc');
+  await loadPlanningList();
+  selectPlanning(`planning_${name}`);
+  toast(`planning_${name}.json created`, 'success');
+}
+
+// ─────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  loadStatus();
+  // Pre-load zones in background
+  fetch('/api/zones').then(r => r.json()).then(d => { allZones = d.zones || []; }).catch(() => {});
+});
+</script>
+</body>
+</html>
