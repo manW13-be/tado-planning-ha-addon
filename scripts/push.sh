@@ -37,14 +37,14 @@ fi
 if [ "$BUMP" = true ]; then
     echo "[PUSH] Fetching latest version from GitHub..."
     git fetch origin main
-    REMOTE_VERSION=$(git show origin/main:config.json | jq -r '.version')
+    REMOTE_VERSION=$(git show origin/main:run/config.json | jq -r '.version')
     IFS='.' read -r MAJOR MINOR PATCH <<< "$REMOTE_VERSION"
     NEW_VERSION="$MAJOR.$MINOR.$((PATCH + 1))"
-    jq --arg v "$NEW_VERSION" '.version = $v' config.json > config.json.tmp && mv config.json.tmp config.json
+    jq --arg v "$NEW_VERSION" '.version = $v' run/config.json > run/config.json.tmp && mv run/config.json.tmp run/config.json
     echo "[PUSH] Version: $REMOTE_VERSION → $NEW_VERSION"
     CURRENT_VERSION="$NEW_VERSION"
 else
-    CURRENT_VERSION=$(jq -r '.version' config.json)
+    CURRENT_VERSION=$(jq -r '.version' run/config.json)
     echo "[PUSH] Version unchanged: $CURRENT_VERSION"
 fi
 
