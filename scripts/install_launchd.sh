@@ -75,8 +75,8 @@ PYTHON_VERSION=$(check_python_version "$PYTHON_BIN") || exit 1
 echo -e "  ${GREEN}✓ Python $PYTHON_VERSION${RESET} → ${PYTHON_BIN}"
 
 # --- Chemins détectés --------------------------------------------------------
-SCRIPT_PATH="${PROJECT_DIR}/tado_planning.py"
-TOKEN_FILE="${PROJECT_DIR}/.tado_token"
+SCRIPT_PATH="${PROJECT_DIR}/run/tado-planning.py"
+TOKEN_FILE="${PROJECT_DIR}/tado_refresh_token"
 SCHEDULES_DIR="${PROJECT_DIR}/schedules"
 LOGS_DIR="${PROJECT_DIR}/logs"
 LOG_OUT="${LOGS_DIR}/tado.log"
