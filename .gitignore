@@ -1,4 +1,4 @@
-# Token d'authentification Tado — ne jamais committer
+# Tado auth token — never commit
 tado_refresh_token
 *.token
 
@@ -7,8 +7,12 @@ tado_refresh_token
 __pycache__/
 *.pyc
 
-# Fichiers de test locaux
+# Local files
 *.log
+*.bak
 
+# Schedule data — personal, not committed
 schedules/
+
+# Logs
 logs/

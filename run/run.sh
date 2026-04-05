@@ -86,9 +86,10 @@ case "$CONTEXT" in
         ;;
     mac)
         SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-        SCHEDULES_DIR="$SCRIPT_DIR/schedules"
-        SCHEDULES_TMPL="$SCRIPT_DIR/schedules.tmpl"
-        TOKEN_FILE="$SCRIPT_DIR/tado_refresh_token"
+        PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+        SCHEDULES_DIR="$PROJECT_DIR/schedules"
+        SCHEDULES_TMPL="$PROJECT_DIR/schedules.tmpl"
+        TOKEN_FILE="$PROJECT_DIR/tado_refresh_token"
         PYTHON=$(which python3.11 2>/dev/null || which python3)
         SCRIPT="$SCRIPT_DIR/tado-planning.py"
         VERBOSITY=0
