@@ -38,37 +38,58 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Mode Linux/HA SSH — déléguer au container via docker exec
+# Mode Linux/HA SSH — run directly with persistent venv
 # ---------------------------------------------------------------------------
 if [ "$CONTEXT" = "linux" ]; then
-    if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${ADDON_CONTAINER}$"; then
-        echo "[TADO] Container not running — starting add-on..."
-        ha apps start "$ADDON_ID" 2>/dev/null || true
-        sleep 4
+    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+    PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+    SCHEDULES_DIR="$PROJECT_DIR/schedules"
+    SCHEDULES_TMPL="$PROJECT_DIR/schedules.tmpl"
+    TOKEN_FILE="$PROJECT_DIR/tado_refresh_token"
+    SCRIPT="$SCRIPT_DIR/tado-planning.py"
+
+    # Persistent venv in /config/ — survives HA reboots
+    VENV_DIR="/config/tado-planning/venv"
+    if [ ! -f "$VENV_DIR/bin/python3" ]; then
+        echo "[TADO] Creating Python venv at $VENV_DIR..."
+        mkdir -p "$(dirname "$VENV_DIR")"
+        python3 -m venv "$VENV_DIR"
+    fi
+    PYTHON="$VENV_DIR/bin/python3"
+
+    # Check and install only missing packages
+    MISSING=()
+    "$PYTHON" -c "import PyTado" 2>/dev/null || MISSING+=("python-tado>=0.18")
+    if [ ${#MISSING[@]} -gt 0 ]; then
+        echo "[TADO] Installing missing packages: ${MISSING[*]}"
+        "$VENV_DIR/bin/pip" install --quiet "${MISSING[@]}"
+        echo "[TADO] Done."
     fi
 
-    if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${ADDON_CONTAINER}$"; then
+    VERSION=$(jq -r '.version' "$SCRIPT_DIR/config.json" 2>/dev/null || echo "unknown")
+    echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — Manual run (linux) — v$VERSION"
+    echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — Schedules : $SCHEDULES_DIR"
+    echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — Token     : $TOKEN_FILE"
 
-        # Vérifier que run.sh dans le container est bien la version déployée
-        LOCAL_HASH=$(md5sum "$0" 2>/dev/null | awk '{print $1}')
-        CONTAINER_HASH=$(docker exec "$ADDON_CONTAINER" md5sum /run.sh 2>/dev/null | awk '{print $1}')
-        if [ -n "$LOCAL_HASH" ] && [ -n "$CONTAINER_HASH" ] && [ "$LOCAL_HASH" != "$CONTAINER_HASH" ]; then
-            echo "[WARN] run.sh in container differs from local version."
-            echo "       Run ./scripts/ha_deploy.sh first for a proper deploy,"
-            echo "       or: docker cp run.sh ${ADDON_CONTAINER}:/run.sh for a quick test."
-            echo ""
-            echo -n "       Continue anyway? [o/N] "
-            read -r confirm
-            [[ ! "$confirm" =~ ^[oOyY]$ ]] && exit 0
+    init_schedules() {
+        if [ ! -d "$SCHEDULES_DIR" ] || [ -z "$(ls -A "$SCHEDULES_DIR" 2>/dev/null)" ]; then
+            if [ -d "$SCHEDULES_TMPL" ]; then
+                echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — Initializing schedules from schedules.tmpl/..."
+                mkdir -p "$SCHEDULES_DIR"
+                cp "$SCHEDULES_TMPL"/* "$SCHEDULES_DIR/"
+            else
+                echo "[TADO] ERROR: schedules/ not found and no schedules.tmpl/ available"
+                exit 1
+            fi
+        else
+            echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — Schedules: $(ls "$SCHEDULES_DIR"/*.json 2>/dev/null | wc -l | tr -d ' ') file(s)"
         fi
+    }
+    init_schedules
 
-        echo "[TADO] Delegating to container $ADDON_CONTAINER — args: $*"
-        docker exec "$ADDON_CONTAINER" /run.sh "$@"
-    else
-        echo "[TADO] ERROR: Could not start the add-on container."
-        echo "[TADO] Start the add-on from the HA UI first, then retry."
-        exit 1
-    fi
+    TADO_SCHEDULES_DIR="$SCHEDULES_DIR" \
+    TADO_TOKEN_FILE="$TOKEN_FILE" \
+    $PYTHON "$SCRIPT" "$@"
     exit 0
 fi
 
