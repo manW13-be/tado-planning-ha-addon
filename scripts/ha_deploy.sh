@@ -14,7 +14,7 @@ REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 ADDON_ID="fc4e2b3e_tado_planning"
 cd "$REPO_DIR"
 
-VERSION=$(jq -r '.version' config.json)
+VERSION=$(jq -r '.version' run/config.json)
 IMAGE="fc4e2b3e/aarch64-addon-tado_planning:$VERSION"
 
 # --- Nettoyage des anciennes images ------------------------------------------
@@ -33,7 +33,7 @@ fi
 
 # --- Build -------------------------------------------------------------------
 echo "[DEPLOY] Building image $IMAGE..."
-docker build --no-cache -t "$IMAGE" "$REPO_DIR"
+docker build --no-cache -f run/Dockerfile -t "$IMAGE" "$REPO_DIR"
 echo "[DEPLOY] Build OK"
 
 # --- Restart -----------------------------------------------------------------

@@ -19,4 +19,4 @@ if [ -f ".gitignore" ]; then
     echo "[FETCH] .gitignore → gitignore"
 fi
 
-echo "[FETCH] Done — v$(jq -r '.version' config.json)"
+echo "[FETCH] Done — v$(jq -r '.version' run/config.json)"
