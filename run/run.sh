@@ -29,7 +29,7 @@ ADDON_ID="fc4e2b3e_tado_planning"
 # ---------------------------------------------------------------------------
 # Détection du contexte
 # ---------------------------------------------------------------------------
-if [ -f "/.dockerenv" ]; then
+if [ -f "/tado-planning.py" ]; then
     CONTEXT="docker"
 elif [ "$(uname)" = "Darwin" ]; then
     CONTEXT="mac"
