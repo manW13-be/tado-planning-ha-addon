@@ -20,11 +20,13 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 # Context detection
 # ---------------------------------------------------------------------------
-if [ -f "/.dockerenv" ]; then
+if [ -f "/tado-planning-cfg.py" ]; then
+    # Script is baked at root by Dockerfile — we're inside the addon container
     CONTEXT="docker"
 elif [ "$(uname)" = "Darwin" ]; then
     CONTEXT="mac"
 else
+    # HA SSH or any other Linux shell
     CONTEXT="linux"
 fi
 
@@ -57,9 +59,36 @@ case "$CONTEXT" in
         INGRESS_PATH=""
         ;;
     linux)
-        echo "[CFG] ERROR: direct Linux/SSH execution not supported for the configurator."
-        echo "[CFG] Access the GUI via the HA sidebar (ingress) once the add-on is running."
-        exit 1
+        SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+        PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+        SCHEDULES_DIR="${TADO_SCHEDULES_DIR:-$PROJECT_DIR/schedules}"
+        TOKEN_FILE="${TADO_TOKEN_FILE:-$PROJECT_DIR/tado_refresh_token}"
+        SCRIPT="$SCRIPT_DIR/tado-planning-cfg.py"
+        PORT="${CFG_PORT:-8099}"
+        HOST="0.0.0.0"
+        NO_BROWSER="--no-browser"
+        PLANNING_ADDON_SLUG=""
+        INGRESS_PATH=""
+
+        # Persistent venv in /config/ — survives HA reboots
+        VENV_DIR="/config/tado-planning-cfg/venv"
+        if [ ! -f "$VENV_DIR/bin/python3" ]; then
+            echo "[CFG] Creating Python venv at $VENV_DIR..."
+            mkdir -p "$(dirname "$VENV_DIR")"
+            python3 -m venv "$VENV_DIR"
+        fi
+        PYTHON="$VENV_DIR/bin/python3"
+
+        # Check and install only missing packages
+        MISSING=()
+        "$PYTHON" -c "import flask"       2>/dev/null || MISSING+=("flask")
+        "$PYTHON" -c "import requests"    2>/dev/null || MISSING+=("requests")
+        "$PYTHON" -c "import PyTado"      2>/dev/null || MISSING+=("python-tado>=0.18")
+        if [ ${#MISSING[@]} -gt 0 ]; then
+            echo "[CFG] Installing missing packages: ${MISSING[*]}"
+            "$VENV_DIR/bin/pip" install --quiet "${MISSING[@]}"
+            echo "[CFG] Done."
+        fi
         ;;
 esac
 
