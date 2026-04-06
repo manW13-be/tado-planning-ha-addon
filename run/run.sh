@@ -101,7 +101,7 @@ case "$CONTEXT" in
         VERBOSITY=$(jq -r '.verbosity // 0' /data/options.json 2>/dev/null || echo "0")
         SCHEDULES_DIR="/config/tado-planning/schedules"
         SCHEDULES_TMPL="/schedules.tmpl"
-        TOKEN_FILE="/data/tado_refresh_token"
+        TOKEN_FILE="/config/tado-planning/tado_refresh_token"
         PYTHON="python3"
         SCRIPT="/tado-planning.py"
         ;;

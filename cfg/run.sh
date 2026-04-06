@@ -36,7 +36,7 @@ fi
 case "$CONTEXT" in
     docker)
         SCHEDULES_DIR="/config/tado-planning/schedules"
-        TOKEN_FILE="/data/tado_refresh_token"
+        TOKEN_FILE="/config/tado-planning/tado_refresh_token"
         PYTHON="python3"
         SCRIPT="/tado-planning-cfg.py"
         PORT=8099
