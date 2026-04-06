@@ -1,0 +1,21 @@
+{
+  "name": "Tado Planning Configurator",
+  "version": "1.0.0",
+  "slug": "tado_planning_cfg",
+  "description": "Web UI to configure Tado Planning schedules",
+  "arch": ["aarch64"],
+  "startup": "application",
+  "boot": "auto",
+  "ingress": true,
+  "ingress_port": 8099,
+  "panel_icon": "mdi:calendar-edit",
+  "panel_title": "Tado Planning",
+  "options": {},
+  "schema": {},
+  "map": [
+    {
+      "type": "config",
+      "read_only": false
+    }
+  ]
+}
