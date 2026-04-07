@@ -117,12 +117,39 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# Resolve access URL for display in logs
+# ---------------------------------------------------------------------------
+get_access_url() {
+    if [ "$CONTEXT" = "docker" ] || [ "$CONTEXT" = "linux" ]; then
+        # Try HA hostname from supervisor API
+        local HA_HOST=""
+        if [ -n "${SUPERVISOR_TOKEN:-}" ]; then
+            HA_HOST=$(curl -sf \
+                -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" \
+                http://supervisor/core/api/config 2>/dev/null \
+                | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('external_url') or d.get('internal_url',''))" \
+                2>/dev/null | sed 's|https\?://||' | cut -d'/' -f1 || true)
+        fi
+        # Fallback: system hostname
+        if [ -z "$HA_HOST" ]; then
+            HA_HOST=$(hostname -f 2>/dev/null || hostname 2>/dev/null || echo "ha2.local")
+        fi
+        echo "http://${HA_HOST}:${PORT}"
+    else
+        echo "http://localhost:${PORT}"
+    fi
+}
+
+ACCESS_URL=$(get_access_url)
+
+# ---------------------------------------------------------------------------
 # Start
 # ---------------------------------------------------------------------------
 echo "[CFG] $(date '+%d/%m/%Y %H:%M:%S') — Tado Planning Configurator v${VERSION} (${CONTEXT})"
 echo "[CFG] $(date '+%d/%m/%Y %H:%M:%S') — Schedules : ${SCHEDULES_DIR}"
 echo "[CFG] $(date '+%d/%m/%Y %H:%M:%S') — Token     : ${TOKEN_FILE}"
 echo "[CFG] $(date '+%d/%m/%Y %H:%M:%S') — Listening : ${HOST}:${PORT}"
+echo "[CFG] $(date '+%d/%m/%Y %H:%M:%S') — Access    : ${ACCESS_URL}"
 [ -n "$INGRESS_PATH" ] && echo "[CFG] $(date '+%d/%m/%Y %H:%M:%S') — Ingress   : ${INGRESS_PATH}"
 
 mkdir -p "${SCHEDULES_DIR}"

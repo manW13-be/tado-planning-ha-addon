@@ -2,7 +2,7 @@
   "name": "Tado Planning Configurator",
   "version": "1.0.0",
   "slug": "tado_planning_cfg",
-  "description": "Web UI to configure Tado Planning schedules",
+  "description": "Web UI to configure Tado Planning schedules. Access at http://ha2.local:8099",
   "arch": ["aarch64"],
   "startup": "application",
   "boot": "auto",
