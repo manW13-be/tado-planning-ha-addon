@@ -1,33 +1,26 @@
 #!/bin/bash
 # =============================================================================
-# run.sh — Tado Planning entry point (universel)
+# tado_planning/run.sh — Universal entry point
 #
-# Contextes détectés automatiquement :
-#   - Dans le container Docker (HA add-on)
-#   - macOS (Darwin)
-#   - Linux / HA SSH (hors container) → re-exécute via docker exec
+# Contexts:
+#   docker  → HA addon container (SUPERVISOR_TOKEN absent from FS, script at /)
+#   mac     → macOS local dev
+#   linux   → HA SSH debug
 #
-# Usage :
-#   ./run.sh                        # run unique, verbosity 0
-#   ./run.sh --loop                 # boucle infinie toutes les heures (HA add-on)
-#   ./run.sh -v                     # verbosity 1
-#   ./run.sh -vv                    # verbosity 2
-#   ./run.sh -vvv                   # verbosity 3
-#   ./run.sh -vvvv                  # verbosity 4
-#   ./run.sh -d 2026-04-10          # simuler une date
-#   ./run.sh -c weekconfig.json     # forcer un weekconfig
-#   ./run.sh -p planning.json       # forcer un planning
+# Docker mode starts both:
+#   - tado-planning.py  (hourly loop, background)
+#   - tado-planning-cfg (Flask web UI, foreground — keeps container alive)
 #
-# Le Dockerfile appelle : CMD ["/run.sh", "--loop"]
+# Mac/Linux mode starts only what's requested:
+#   --loop  → planning loop only (no Flask)
+#   --cfg   → Flask only
+#   (none)  → single planning run
 # =============================================================================
 
 set -euo pipefail
 
-ADDON_CONTAINER="addon_fc4e2b3e_tado_planning"
-ADDON_ID="fc4e2b3e_tado_planning"
-
 # ---------------------------------------------------------------------------
-# Détection du contexte
+# Context detection
 # ---------------------------------------------------------------------------
 if [ -f "/tado-planning.py" ]; then
     CONTEXT="docker"
@@ -38,63 +31,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Mode Linux/HA SSH — run directly with persistent venv
-# ---------------------------------------------------------------------------
-if [ "$CONTEXT" = "linux" ]; then
-    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-    PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-    SCHEDULES_DIR="$PROJECT_DIR/schedules"
-    SCHEDULES_TMPL="$PROJECT_DIR/schedules.tmpl"
-    TOKEN_FILE="$PROJECT_DIR/tado_refresh_token"
-    SCRIPT="$SCRIPT_DIR/tado-planning.py"
-
-    # Persistent venv in /config/ — survives HA reboots
-    VENV_DIR="/config/tado-planning/venv"
-    if [ ! -f "$VENV_DIR/bin/python3" ]; then
-        echo "[TADO] Creating Python venv at $VENV_DIR..."
-        mkdir -p "$(dirname "$VENV_DIR")"
-        python3 -m venv "$VENV_DIR"
-    fi
-    PYTHON="$VENV_DIR/bin/python3"
-
-    # Check and install only missing packages
-    MISSING=()
-    "$PYTHON" -c "import PyTado" 2>/dev/null || MISSING+=("python-tado>=0.18")
-    if [ ${#MISSING[@]} -gt 0 ]; then
-        echo "[TADO] Installing missing packages: ${MISSING[*]}"
-        "$VENV_DIR/bin/pip" install --quiet "${MISSING[@]}"
-        echo "[TADO] Done."
-    fi
-
-    VERSION=$(jq -r '.version' "$SCRIPT_DIR/config.json" 2>/dev/null || echo "unknown")
-    echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — Manual run (linux) — v$VERSION"
-    echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — Schedules : $SCHEDULES_DIR"
-    echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — Token     : $TOKEN_FILE"
-
-    init_schedules() {
-        if [ ! -d "$SCHEDULES_DIR" ] || [ -z "$(ls -A "$SCHEDULES_DIR" 2>/dev/null)" ]; then
-            if [ -d "$SCHEDULES_TMPL" ]; then
-                echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — Initializing schedules from schedules.tmpl/..."
-                mkdir -p "$SCHEDULES_DIR"
-                cp "$SCHEDULES_TMPL"/* "$SCHEDULES_DIR/"
-            else
-                echo "[TADO] ERROR: schedules/ not found and no schedules.tmpl/ available"
-                exit 1
-            fi
-        else
-            echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — Schedules: $(ls "$SCHEDULES_DIR"/*.json 2>/dev/null | wc -l | tr -d ' ') file(s)"
-        fi
-    }
-    init_schedules
-
-    TADO_SCHEDULES_DIR="$SCHEDULES_DIR" \
-    TADO_TOKEN_FILE="$TOKEN_FILE" \
-    $PYTHON "$SCRIPT" "$@"
-    exit 0
-fi
-
-# ---------------------------------------------------------------------------
-# Configuration — Docker (dans le container) ou Mac
+# Paths per context
 # ---------------------------------------------------------------------------
 case "$CONTEXT" in
     docker)
@@ -103,7 +40,10 @@ case "$CONTEXT" in
         SCHEDULES_TMPL="/schedules.tmpl"
         TOKEN_FILE="/config/tado-planning/tado_refresh_token"
         PYTHON="python3"
-        SCRIPT="/tado-planning.py"
+        PLANNING_SCRIPT="/tado-planning.py"
+        CFG_SCRIPT="/tado-planning-cfg.py"
+        CFG_PORT=8099
+        CFG_HOST="0.0.0.0"
         ;;
     mac)
         SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -112,47 +52,92 @@ case "$CONTEXT" in
         SCHEDULES_TMPL="$PROJECT_DIR/schedules.tmpl"
         TOKEN_FILE="$PROJECT_DIR/tado_refresh_token"
         PYTHON=$(which python3.11 2>/dev/null || which python3)
-        SCRIPT="$SCRIPT_DIR/tado-planning.py"
+        PLANNING_SCRIPT="$SCRIPT_DIR/tado-planning.py"
+        CFG_SCRIPT="$SCRIPT_DIR/tado-planning-cfg.py"
+        CFG_PORT="${CFG_PORT:-8080}"
+        CFG_HOST="127.0.0.1"
         VERBOSITY=0
+        ;;
+    linux)
+        SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+        PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+        SCHEDULES_DIR="${TADO_SCHEDULES_DIR:-$PROJECT_DIR/schedules}"
+        SCHEDULES_TMPL="$PROJECT_DIR/schedules.tmpl"
+        TOKEN_FILE="${TADO_TOKEN_FILE:-$PROJECT_DIR/tado_refresh_token}"
+        PLANNING_SCRIPT="$SCRIPT_DIR/tado-planning.py"
+        CFG_SCRIPT="$SCRIPT_DIR/tado-planning-cfg.py"
+        CFG_PORT="${CFG_PORT:-8099}"
+        CFG_HOST="0.0.0.0"
+        VERBOSITY=0
+
+        # Persistent venv in /config/ — survives HA reboots
+        VENV_DIR="/config/tado-planning/venv"
+        if [ ! -f "$VENV_DIR/bin/python3" ]; then
+            echo "[TADO] Creating Python venv at $VENV_DIR..."
+            mkdir -p "$(dirname "$VENV_DIR")"
+            python3 -m venv "$VENV_DIR"
+        fi
+        PYTHON="$VENV_DIR/bin/python3"
+
+        MISSING=()
+        "$PYTHON" -c "import PyTado" 2>/dev/null || MISSING+=("python-tado>=0.18")
+        "$PYTHON" -c "import flask"   2>/dev/null || MISSING+=("flask")
+        "$PYTHON" -c "import requests" 2>/dev/null || MISSING+=("requests")
+        if [ ${#MISSING[@]} -gt 0 ]; then
+            echo "[TADO] Installing: ${MISSING[*]}"
+            "$VENV_DIR/bin/pip" install --quiet "${MISSING[@]}"
+        fi
         ;;
 esac
 
 # ---------------------------------------------------------------------------
-# Extraction de --loop et construction des flags Python
+# Parse args
 # ---------------------------------------------------------------------------
 LOOP=false
+RUN_CFG=false
 PYTHON_ARGS=()
+
 for arg in "$@"; do
-    if [ "$arg" = "--loop" ]; then
-        LOOP=true
-    else
-        PYTHON_ARGS+=("$arg")
-    fi
+    case "$arg" in
+        --loop) LOOP=true ;;
+        --cfg)  RUN_CFG=true ;;
+        *)      PYTHON_ARGS+=("$arg") ;;
+    esac
 done
 
-# En mode loop Docker, utiliser le verbosity de options.json
+# Docker --loop → start both
 if [ "$LOOP" = true ] && [ "$CONTEXT" = "docker" ]; then
     VFLAG=""
-    if [ "$VERBOSITY" -gt 0 ] 2>/dev/null; then
+    if [ "${VERBOSITY:-0}" -gt 0 ] 2>/dev/null; then
         VFLAG="-$(printf '%0.sv' $(seq 1 "$VERBOSITY"))"
     fi
     PYTHON_ARGS=($VFLAG)
+    RUN_CFG=true
 fi
 
 # ---------------------------------------------------------------------------
-# Initialisation des schedules depuis schedules.tmpl si absent ou vide
+# Version
+# ---------------------------------------------------------------------------
+if [ "$CONTEXT" = "docker" ]; then
+    VERSION=$(jq -r '.version' /config/tado-planning/config.json 2>/dev/null || echo "unknown")
+elif [ "$CONTEXT" = "mac" ]; then
+    VERSION=$(jq -r '.version' "$SCRIPT_DIR/config.json" 2>/dev/null || echo "unknown")
+else
+    VERSION=$(jq -r '.version' "$SCRIPT_DIR/config.json" 2>/dev/null || echo "unknown")
+fi
+
+# ---------------------------------------------------------------------------
+# Init schedules
 # ---------------------------------------------------------------------------
 init_schedules() {
     if [ ! -d "$SCHEDULES_DIR" ] || [ -z "$(ls -A "$SCHEDULES_DIR" 2>/dev/null)" ]; then
         if [ -d "$SCHEDULES_TMPL" ]; then
-            echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — schedules/ not found — initializing from schedules.tmpl/..."
+            echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — Initializing schedules from schedules.tmpl/..."
             mkdir -p "$SCHEDULES_DIR"
             cp "$SCHEDULES_TMPL"/* "$SCHEDULES_DIR/"
-            echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — schedules/ initialized ($(ls "$SCHEDULES_DIR"/*.json 2>/dev/null | wc -l | tr -d ' ') files)"
-            echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — ⚠ Review and adapt schedule files before next run"
+            echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — ⚠ Review schedule files before next run"
         else
-            echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — ERROR: schedules/ not found and no schedules.tmpl/ available"
-            echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — Run: ./scripts/init_schedules.sh"
+            echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — ERROR: schedules/ not found and no schedules.tmpl/"
             exit 1
         fi
     else
@@ -160,9 +145,6 @@ init_schedules() {
     fi
 }
 
-# ---------------------------------------------------------------------------
-# Fonction next run time (compatible Mac et Linux)
-# ---------------------------------------------------------------------------
 next_run_time() {
     NEXT=$(( 3600 - $(date +%s) % 3600 ))
     if [ "$(uname)" = "Darwin" ]; then
@@ -173,42 +155,75 @@ next_run_time() {
 }
 
 # ---------------------------------------------------------------------------
-# Version
+# Resolve access URL for cfg
 # ---------------------------------------------------------------------------
-if [ "$CONTEXT" = "docker" ]; then
-    VERSION=$(jq -r '.version' /config/tado-planning/config.json 2>/dev/null || echo "unknown")
-else
-    VERSION=$(jq -r '.version' "$SCRIPT_DIR/config.json" 2>/dev/null || echo "unknown")
-fi
+get_cfg_url() {
+    local HA_HOST=""
+    if [ -n "${SUPERVISOR_TOKEN:-}" ]; then
+        HA_HOST=$(curl -sf \
+            -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" \
+            http://supervisor/core/api/config 2>/dev/null \
+            | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('internal_url',''))" \
+            2>/dev/null | sed 's|https\?://||' | cut -d'/' -f1 || true)
+    fi
+    if [ -z "$HA_HOST" ]; then
+        HA_HOST=$(hostname -f 2>/dev/null || hostname 2>/dev/null || echo "ha2.local")
+    fi
+    echo "http://${HA_HOST}:${CFG_PORT}"
+}
 
 # ---------------------------------------------------------------------------
 # Run
 # ---------------------------------------------------------------------------
-if [ "$LOOP" = true ]; then
-    # --- Mode boucle (HA add-on) ---
+if [ "$LOOP" = true ] && [ "$CONTEXT" = "docker" ]; then
+
     echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — Add-on started — v$VERSION — verbosity: $VERBOSITY"
     init_schedules
-    if [ ! -f "$TOKEN_FILE" ]; then
-        echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — No token found — auth URL will appear on first run"
-    fi
-    echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — Starting main loop..."
+
+    # Start Flask configurator in background
+    CFG_URL=$(get_cfg_url)
+    echo "[CFG]  $(date '+%d/%m/%Y %H:%M:%S') — Starting configurator on ${CFG_HOST}:${CFG_PORT}"
+    echo "[CFG]  $(date '+%d/%m/%Y %H:%M:%S') — Access : ${CFG_URL}"
+    TADO_SCHEDULES_DIR="$SCHEDULES_DIR" \
+    TADO_TOKEN_FILE="$TOKEN_FILE" \
+    PLANNING_ADDON_SLUG="fc4e2b3e_tado_planning" \
+    $PYTHON "$CFG_SCRIPT" --host "$CFG_HOST" --port "$CFG_PORT" --no-browser &
+    CFG_PID=$!
+
+    echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — Starting planning loop..."
     while true; do
         echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — Running..."
         TADO_SCHEDULES_DIR="$SCHEDULES_DIR" \
         TADO_TOKEN_FILE="$TOKEN_FILE" \
-        $PYTHON "$SCRIPT" ${PYTHON_ARGS[@]+"${PYTHON_ARGS[@]}"} 2>&1 \
+        $PYTHON "$PLANNING_SCRIPT" ${PYTHON_ARGS[@]+"${PYTHON_ARGS[@]}"} 2>&1 \
             || echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — Script exited with error $?"
         echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — Next run at $(next_run_time)"
         sleep $(( 3600 - $(date +%s) % 3600 ))
     done
 
+elif [ "$RUN_CFG" = true ]; then
+
+    # CFG only (Mac --cfg or Linux --cfg)
+    init_schedules
+    CFG_URL=$(get_cfg_url)
+    echo "[CFG]  $(date '+%d/%m/%Y %H:%M:%S') — Configurator v$VERSION (${CONTEXT})"
+    echo "[CFG]  $(date '+%d/%m/%Y %H:%M:%S') — Schedules : $SCHEDULES_DIR"
+    echo "[CFG]  $(date '+%d/%m/%Y %H:%M:%S') — Token     : $TOKEN_FILE"
+    echo "[CFG]  $(date '+%d/%m/%Y %H:%M:%S') — Access    : ${CFG_URL}"
+    TADO_SCHEDULES_DIR="$SCHEDULES_DIR" \
+    TADO_TOKEN_FILE="$TOKEN_FILE" \
+    $PYTHON "$CFG_SCRIPT" --host "$CFG_HOST" --port "$CFG_PORT" \
+        $( [ "$CONTEXT" != "mac" ] && echo "--no-browser" )
+
 else
-    # --- Mode run unique (manuel) ---
+
+    # Single planning run (Mac, Linux, or HA SSH)
     echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — Manual run ($CONTEXT) — v$VERSION"
     echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — Schedules : $SCHEDULES_DIR"
     echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — Token     : $TOKEN_FILE"
     init_schedules
     TADO_SCHEDULES_DIR="$SCHEDULES_DIR" \
     TADO_TOKEN_FILE="$TOKEN_FILE" \
-    $PYTHON "$SCRIPT" ${PYTHON_ARGS[@]+"${PYTHON_ARGS[@]}"}
+    $PYTHON "$PLANNING_SCRIPT" ${PYTHON_ARGS[@]+"${PYTHON_ARGS[@]}"}
+
 fi
