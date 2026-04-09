@@ -44,9 +44,8 @@ VERSION=$(jq -r '.version' "$REPO_DIR/tado_planning/config.json" 2>/dev/null || 
 log "Building '$TEST_IMAGE' (v$VERSION) from $REPO_DIR..."
 
 docker build --no-cache \
-    -f "$REPO_DIR/tado_planning/Dockerfile" \
     -t "$TEST_IMAGE" \
-    "$REPO_DIR"
+    "$REPO_DIR/tado_planning"
 
 log "Build complete."
 log "Start with:"
