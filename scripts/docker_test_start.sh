@@ -71,7 +71,9 @@ for arg in "$@"; do
 done
 
 TZ=$(printenv TZ 2>/dev/null || echo "Europe/Brussels")
-HOST_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost")
+HOST_IP=$(ip route get 1.1.1.1 2>/dev/null | awk '/src/{print $7; exit}')
+HOST_IP=${HOST_IP:-$(hostname -I 2>/dev/null | awk '{print $1}')}
+HOST_IP=${HOST_IP:-localhost}
 
 log "Starting test container '$TEST_CONTAINER' — args: ${*:-<none>}"
 
