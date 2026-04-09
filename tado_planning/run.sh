@@ -238,18 +238,22 @@ next_run_time() {
 # CFG access URL
 # ---------------------------------------------------------------------------
 get_cfg_url() {
-    local HA_HOST=""
+    local HOST=""
     if [ -n "${SUPERVISOR_TOKEN:-}" ]; then
-        HA_HOST=$(curl -sf \
+        HOST=$(curl -sf \
             -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" \
             http://supervisor/core/api/config 2>/dev/null \
             | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('internal_url',''))" \
             2>/dev/null | sed 's|https\?://||' | cut -d'/' -f1 || true)
     fi
-    if [ -z "$HA_HOST" ]; then
-        HA_HOST=$(hostname -f 2>/dev/null || hostname 2>/dev/null || echo "homeassistant.local")
+    if [ -z "$HOST" ]; then
+        if [ "$(uname)" = "Darwin" ]; then
+            HOST=$(hostname -f 2>/dev/null || echo "localhost")
+        else
+            HOST=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost")
+        fi
     fi
-    echo "http://${HA_HOST}:${CFG_PORT}"
+    echo "http://${HOST}:${CFG_PORT}"
 }
 
 # ---------------------------------------------------------------------------

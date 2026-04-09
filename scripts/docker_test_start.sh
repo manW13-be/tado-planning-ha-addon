@@ -7,17 +7,25 @@
 #
 # Modes:
 #   (no flag)         single scheduler run — container exits after completion
-#   --loop            scheduler loop + Flask — container stays alive (detached)
-#   --cfg             Flask configurator — container stays alive (detached)
+#   --loop            scheduler loop + Flask configurator — stays alive (detached)
+#   --cfg             Flask configurator only — stays alive (detached)
 #   -vv / -d DATE / … passed through to the Python script
+#
+# --loop vs --cfg:
+#   --loop  starts both the hourly scheduler loop AND the Flask configurator
+#           (mirrors prod container behaviour)
+#   --cfg   starts only the Flask configurator
 #
 # Refuses if prod container is running.
 #
 # Usage:
-#   ./scripts/docker_test_start.sh
-#   ./scripts/docker_test_start.sh --loop
-#   ./scripts/docker_test_start.sh --cfg
-#   ./scripts/docker_test_start.sh -vv -d 2026-04-10
+#   ./scripts/docker_test_start.sh                        # single scheduler run
+#   ./scripts/docker_test_start.sh --loop                 # scheduler loop + Flask
+#   ./scripts/docker_test_start.sh --cfg                  # Flask only
+#   ./scripts/docker_test_start.sh -vv                    # single run, verbosity 2
+#   ./scripts/docker_test_start.sh -d 2026-04-10 -vv      # simulate date
+#   ./scripts/docker_test_start.sh -p planning_easter2026.json  # force planning
+#   ./scripts/docker_test_start.sh -c vacancewithkids.json      # force weekconfig
 # =============================================================================
 
 set -euo pipefail
@@ -45,7 +53,7 @@ fi
 # Check test image exists
 if ! docker images --format '{{.Repository}}' 2>/dev/null | grep -q "^${TEST_IMAGE}$"; then
     die "Test image '$TEST_IMAGE' not found.
-  Build it first: ./scripts/docker_test_deploy.sh"
+  Build it first: ./scripts/docker_test_build.sh"
 fi
 
 # Remove stale test container if any
@@ -63,6 +71,7 @@ for arg in "$@"; do
 done
 
 TZ=$(printenv TZ 2>/dev/null || echo "Europe/Brussels")
+HOST_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost")
 
 log "Starting test container '$TEST_CONTAINER' — args: ${*:-<none>}"
 
@@ -79,9 +88,11 @@ if [ "$DETACHED" = true ]; then
 
     log "Container started in background."
     log "Logs  : docker logs -f $TEST_CONTAINER"
+    log "Exec  : docker exec -it $TEST_CONTAINER /run.sh --run -vv"
+    log "Exec  : docker exec -it $TEST_CONTAINER /run.sh --run -d 2026-04-10 -vv"
     log "Stop  : ./scripts/docker_test_stop.sh"
     if [[ " $* " =~ " --cfg " ]] || [[ " $* " =~ " --loop " ]]; then
-        log "Flask : http://homeassistant.local:${CFG_PORT}"
+        log "Flask : http://${HOST_IP}:${CFG_PORT}"
     fi
 else
     # Single run — attached, container exits when done
