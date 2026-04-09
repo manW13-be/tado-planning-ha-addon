@@ -12,7 +12,7 @@ COPY tado_planning/run.sh               /run.sh
 COPY tado_planning/static/              /static/
 COPY tado_planning/templates/           /templates/
 COPY tado_planning/config.json          /config.json.addon
-COPY schedules.tmpl/                    /schedules.tmpl/
+COPY tado_planning/schedules.tmpl/      /schedules.tmpl/
 
 RUN chmod +x /run.sh
 

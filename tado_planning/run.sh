@@ -146,7 +146,7 @@ case "$CONTEXT" in
         SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
         PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
         SCHEDULES_DIR="$PROJECT_DIR/schedules"
-        SCHEDULES_TMPL="$PROJECT_DIR/schedules.tmpl"
+        SCHEDULES_TMPL="$SCRIPT_DIR/schedules.tmpl"
         TOKEN_FILE="$PROJECT_DIR/tado_refresh_token"
         PYTHON=$(which python3.11 2>/dev/null || which python3)
         PLANNING_SCRIPT="$SCRIPT_DIR/tado-planning-run.py"
@@ -161,7 +161,7 @@ case "$CONTEXT" in
         SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
         PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
         SCHEDULES_DIR="/config/tado-planning/schedules"
-        SCHEDULES_TMPL="$PROJECT_DIR/schedules.tmpl"
+        SCHEDULES_TMPL="$SCRIPT_DIR/schedules.tmpl"
         TOKEN_FILE="/config/tado-planning/tado_refresh_token"
         CFG_PORT="${CFG_PORT:-8099}"
         CFG_HOST="0.0.0.0"
