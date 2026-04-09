@@ -215,7 +215,8 @@ def get_active_status():
 
 @app.route("/")
 def index():
-    return render_template("index.html")
+    ingress_path = request.headers.get("X-Ingress-Path", "")
+    return render_template("index.html", ingress_path=ingress_path)
 
 # ---------------------------------------------------------------------------
 # API — ZONES
