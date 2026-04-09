@@ -36,8 +36,17 @@ LAUNCHD_LABEL="com.tado-planning"
 
 # ---------------------------------------------------------------------------
 # Context detection
+#
+# /.dockerenv exists on HAOS shell too (it runs inside a container itself),
+# so we cannot use it alone to detect "inside addon container".
+# Reliable signal: the Dockerfile places run.sh at /run.sh — if this script
+# is running from /, we are inside an addon container; otherwise we are on
+# the HA SSH shell (or Mac).
 # ---------------------------------------------------------------------------
-if [ -f "/.dockerenv" ]; then
+SELF_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+if [ "$SELF_DIR" = "/" ]; then
+    # Inside a Docker container (run.sh placed at / by Dockerfile)
     if hostname 2>/dev/null | grep -q "fc4e2b3e"; then
         CONTEXT="ha-docker-prod"
     else
@@ -71,6 +80,7 @@ for arg in "$@"; do
     case "$arg" in
         --loop) LOOP=true ;;
         --cfg)  RUN_CFG=true ;;
+        --run)  ;;   # explicit single-run flag — no-op (default behaviour)
         *)      PYTHON_ARGS+=("$arg") ;;
     esac
 done
@@ -189,7 +199,7 @@ case "$CONTEXT" in
         CFG_SCRIPT="/tado-planning-cfg.py"
         CFG_PORT=8099
         CFG_HOST="0.0.0.0"
-        VERSION=$(jq -r '.version' /config/tado-planning/config.json 2>/dev/null || echo "unknown")
+        VERSION=$(jq -r '.version' /config.json.addon 2>/dev/null || echo "unknown")
         ;;
 esac
 
