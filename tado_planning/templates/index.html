@@ -721,6 +721,10 @@
 <div id="toast"></div>
 
 <script>
+// Ingress base path — injected by Flask, empty when accessed directly
+window.API_BASE = "{{ ingress_path }}";
+</script>
+<script>
 // ─────────────────────────────────────────────
 // GLOBALS
 // ─────────────────────────────────────────────
@@ -772,7 +776,7 @@ async function loadStatus() {
   const el = document.getElementById('status-content');
   el.innerHTML = '<div class="loading-placeholder"><span class="spinner"></span> Loading…</div>';
   try {
-    const r = await fetch('/api/status');
+    const r = await fetch(window.API_BASE + '/api/status');
     const d = await r.json();
     if (d.error) { el.innerHTML = `<div class="empty"><p>Error: ${d.error}</p></div>`; return; }
 
@@ -840,7 +844,7 @@ async function loadWeekconfigs() {
   const listEl = document.getElementById('weekconfig-list');
   listEl.innerHTML = '<div class="loading-placeholder"><span class="spinner"></span></div>';
   try {
-    const r = await fetch('/api/configs');
+    const r = await fetch(window.API_BASE + '/api/configs');
     const d = await r.json();
     if (!d.configs.length) {
       listEl.innerHTML = '<div class="empty"><p>No files</p></div>';
@@ -865,14 +869,14 @@ async function selectWeekconfig(name) {
 
   if (!allZones.length) {
     try {
-      const r = await fetch('/api/zones');
+      const r = await fetch(window.API_BASE + '/api/zones');
       const d = await r.json();
       allZones = d.zones || [];
     } catch(e) {}
   }
 
   try {
-    const r = await fetch(`/api/configs/${name}`);
+    const r = await fetch(window.API_BASE + `/api/configs/${name}`);
     const data = await r.json();
     currentWeekconfigs[name] = data;
     renderWCEditor(name, data);
@@ -1097,7 +1101,7 @@ function changeZoneTimetable(cfg, zone, newTT) {
 
 async function saveWeekconfig(name) {
   try {
-    const r = await fetch(`/api/configs/${name}`, {
+    const r = await fetch(window.API_BASE + `/api/configs/${name}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(currentWeekconfigs[name])
@@ -1110,7 +1114,7 @@ async function saveWeekconfig(name) {
 
 async function deleteWeekconfig(name) {
   if (!confirm(`Delete ${name}.json?`)) return;
-  await fetch(`/api/configs/${name}`, { method: 'DELETE' });
+  await fetch(window.API_BASE + `/api/configs/${name}`, { method: 'DELETE' });
   currentWeekconfig = null;
   document.getElementById('weekconfig-editor').innerHTML = `<div class="empty"><p>File deleted</p></div>`;
   loadWeekconfigs();
@@ -1122,13 +1126,13 @@ async function createWeekconfig() {
   const name = document.getElementById('new-wc-name').value.trim().replace(/[^a-z0-9_-]/gi, '_');
   if (!name) return;
   if (!allZones.length) {
-    try { const r = await fetch('/api/zones'); const d = await r.json(); allZones = d.zones || []; } catch(e) {}
+    try { const r = await fetch(window.API_BASE + '/api/zones'); const d = await r.json(); allZones = d.zones || []; } catch(e) {}
   }
   const empty = {};
   allZones.forEach(z => {
     empty[z.name] = { timetable: 'Mon-Sun', 'Mon-Sun': [], away_temp: 15.0, away_enabled: false, preheat: 'off', early_start: false };
   });
-  await fetch(`/api/configs/${name}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(empty) });
+  await fetch(window.API_BASE + `/api/configs/${name}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(empty) });
   closeModal('modal-new-wc');
   await loadWeekconfigs();
   selectWeekconfig(name);
@@ -1144,8 +1148,8 @@ async function loadPlanningList() {
   el.innerHTML = '<div class="loading-placeholder"><span class="spinner"></span></div>';
   try {
     const [sr, er] = await Promise.all([
-      fetch('/api/planning/standard'),
-      fetch('/api/planning/exceptions')
+      fetch(window.API_BASE + '/api/planning/standard'),
+      fetch(window.API_BASE + '/api/planning/exceptions')
     ]);
     const stdData = await sr.json();
     const excData = await er.json();
@@ -1192,9 +1196,9 @@ async function selectPlanning(name) {
 
   try {
     const url = name === 'standard'
-      ? '/api/planning/standard'
-      : `/api/planning/exceptions/${name}`;
-    const [dr, cr] = await Promise.all([fetch(url), fetch('/api/configs')]);
+      ? window.API_BASE + '/api/planning/standard'
+      : window.API_BASE + `/api/planning/exceptions/${name}`;
+    const [dr, cr] = await Promise.all([fetch(url), fetch(window.API_BASE + '/api/configs')]);
     currentPlanningData   = await dr.json();
     currentPlanningEvents = currentPlanningData.events || [];
     const configs = (await cr.json()).configs || [];
@@ -1358,7 +1362,7 @@ function addPlanEvent() {
     config: document.getElementById('plan-ev-config').value,
     level:  parseInt(document.getElementById('plan-ev-level').value)
   });
-  fetch('/api/configs').then(r => r.json()).then(d => renderPlanningEditor(d.configs || []));
+  fetch(window.API_BASE + '/api/configs').then(r => r.json()).then(d => renderPlanningEditor(d.configs || []));
 }
 
 function deletePlanEvent(i) {
@@ -1368,7 +1372,7 @@ function deletePlanEvent(i) {
     return count === i;
   });
   if (idx !== -1) currentPlanningEvents.splice(idx, 1);
-  fetch('/api/configs').then(r => r.json()).then(d => renderPlanningEditor(d.configs || []));
+  fetch(window.API_BASE + '/api/configs').then(r => r.json()).then(d => renderPlanningEditor(d.configs || []));
 }
 
 async function savePlan() {
@@ -1376,8 +1380,8 @@ async function savePlan() {
   const isStd = name === 'standard';
   currentPlanningData.events = currentPlanningEvents;
   const url = isStd
-    ? '/api/planning/standard'
-    : `/api/planning/exceptions/${name}`;
+    ? window.API_BASE + '/api/planning/standard'
+    : window.API_BASE + `/api/planning/exceptions/${name}`;
   const r = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1390,7 +1394,7 @@ async function savePlan() {
 
 async function deletePlanFile(name) {
   if (!confirm(`Delete ${name}?`)) return;
-  await fetch(`/api/planning/exceptions/${name}`, { method: 'DELETE' });
+  await fetch(window.API_BASE + `/api/planning/exceptions/${name}`, { method: 'DELETE' });
   currentPlanningName   = null;
   currentPlanningData   = null;
   currentPlanningEvents = [];
@@ -1407,7 +1411,7 @@ async function createException() {
   const end   = document.getElementById('new-exc-end').value.replace('T', ' ');
   if (!name || !start || !end) { toast('Required fields missing', 'error'); return; }
   const obj = { _description: desc || name, period: { start, end }, events: [] };
-  await fetch(`/api/planning/exceptions/planning_${name}`, {
+  await fetch(window.API_BASE + `/api/planning/exceptions/planning_${name}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(obj)
@@ -1424,7 +1428,7 @@ async function createException() {
 document.addEventListener('DOMContentLoaded', () => {
   loadStatus();
   // Pre-load zones in background
-  fetch('/api/zones').then(r => r.json()).then(d => { allZones = d.zones || []; }).catch(() => {});
+  fetch(window.API_BASE + '/api/zones').then(r => r.json()).then(d => { allZones = d.zones || []; }).catch(() => {});
 });
 </script>
 </body>
