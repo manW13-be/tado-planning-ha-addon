@@ -2,7 +2,7 @@
 # =============================================================================
 # scripts/docker_test_remove.sh — Remove test container and image
 #
-# Use for a clean slate before docker_test_deploy.sh.
+# Use for a clean slate before docker_test_build.sh.
 #
 # Usage:
 #   ./scripts/docker_test_remove.sh
@@ -32,4 +32,4 @@ else
     log "Image '$TEST_IMAGE' not present."
 fi
 
-log "Done. Rebuild from scratch: ./scripts/docker_test_deploy.sh"
+log "Done. Rebuild from scratch: ./scripts/docker_test_build.sh"

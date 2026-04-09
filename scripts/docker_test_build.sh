@@ -1,13 +1,13 @@
 #!/bin/bash
 # =============================================================================
-# scripts/docker_test_deploy.sh — Build the test Docker image
+# scripts/docker_test_build.sh — Build the test Docker image
 #
 # Builds image 'addon_test_tado_planning' from local sources.
 # Must be run from HA SSH in the repo directory.
 # Refuses if prod container is running.
 #
 # Usage:
-#   ./scripts/docker_test_deploy.sh
+#   ./scripts/docker_test_build.sh
 # =============================================================================
 
 set -euo pipefail
@@ -17,8 +17,8 @@ PROD_CONTAINER="addon_fc4e2b3e_tado_planning"
 TEST_IMAGE="addon_test_tado_planning"
 TEST_CONTAINER="addon_test_tado_planning"
 
-log() { echo "[TEST-DEPLOY] $(date '+%d/%m/%Y %H:%M:%S') — $*"; }
-die() { echo "[TEST-DEPLOY] ERROR: $*" >&2; exit 1; }
+log() { echo "[TEST-BUILD] $(date '+%d/%m/%Y %H:%M:%S') — $*"; }
+die() { echo "[TEST-BUILD] ERROR: $*" >&2; exit 1; }
 
 [ "$(uname)" = "Darwin" ] && die "This script must be run on HA SSH, not on macOS."
 
@@ -49,4 +49,11 @@ docker build --no-cache \
     "$REPO_DIR"
 
 log "Build complete."
-log "Start with: ./scripts/docker_test_start.sh [--loop|--cfg|-vv|-d DATE|...]"
+log "Start with:"
+log "  ./scripts/docker_test_start.sh                        # single scheduler run"
+log "  ./scripts/docker_test_start.sh --loop                 # scheduler loop + Flask"
+log "  ./scripts/docker_test_start.sh --cfg                  # Flask only"
+log "  ./scripts/docker_test_start.sh -vv                    # single run, verbosity 2"
+log "  ./scripts/docker_test_start.sh -d 2026-04-10 -vv      # simulate date"
+log "  ./scripts/docker_test_start.sh -p planning_easter2026.json  # force planning"
+log "  ./scripts/docker_test_start.sh -c vacancewithkids.json      # force weekconfig"
