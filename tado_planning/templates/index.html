@@ -1,1435 +1,1225 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Tado Planning — Configuration</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&display=swap" rel="stylesheet">
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tado Planning</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-    :root {
-      --bg:        #f7f6f3;
-      --surface:   #ffffff;
-      --surface2:  #f0efe9;
-      --border:    #e2e0d8;
-      --border2:   #d0cec4;
-      --text:      #1a1916;
-      --text2:     #6b6960;
-      --text3:     #9e9c94;
-      --accent:    #2a5bd7;
-      --accent-bg: #eef2fd;
-      --green:     #1a7a4a;
-      --green-bg:  #e8f5ee;
-      --amber:     #a05c00;
-      --amber-bg:  #fdf3e3;
-      --red:       #c0392b;
-      --red-bg:    #fdecea;
-      --radius:    6px;
-      --radius-lg: 10px;
-      --shadow:    0 1px 3px rgba(0,0,0,.07), 0 1px 2px rgba(0,0,0,.05);
-      --shadow-md: 0 4px 12px rgba(0,0,0,.08), 0 1px 3px rgba(0,0,0,.06);
-    }
+:root {
+  --bg:       #f5f6f8;
+  --surface:  #ffffff;
+  --border:   #e2e4e9;
+  --text:     #1a1d23;
+  --muted:    #6b7280;
+  --accent:   #2563eb;
+  --accent-h: #1d4ed8;
+  --red:      #dc2626;
+  --green:    #16a34a;
+  --orange:   #d97706;
+  --l1:       #2563eb;
+  --l2:       #7c3aed;
+  --warn-bg:  #fef3c7;
+  --warn-bd:  #fcd34d;
+  --font:     -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --mono:     'SF Mono', 'Fira Code', monospace;
+  --radius:   8px;
+  --shadow:   0 1px 3px rgba(0,0,0,.08);
+}
 
-    body {
-      font-family: 'DM Sans', sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      font-size: 14px;
-      line-height: 1.6;
-      min-height: 100vh;
-    }
+body { font-family: var(--font); background: var(--bg); color: var(--text);
+       display: flex; height: 100vh; overflow: hidden; font-size: 14px; }
 
-    /* ── LAYOUT ── */
-    .app { display: flex; min-height: 100vh; }
+/* ── SIDEBAR ── */
+.sidebar { width: 220px; background: var(--surface); border-right: 1px solid var(--border);
+           display: flex; flex-direction: column; flex-shrink: 0; }
+.sidebar-title { padding: 20px 16px 12px; font-size: 13px; font-weight: 700;
+                 letter-spacing: .05em; color: var(--accent); text-transform: uppercase; }
+.nav-section { padding: 4px 8px; font-size: 11px; font-weight: 600; color: var(--muted);
+               text-transform: uppercase; letter-spacing: .08em; margin-top: 8px; }
+.nav-item { display: flex; align-items: center; gap: 8px; padding: 7px 12px;
+            margin: 1px 4px; border-radius: 6px; cursor: pointer; font-size: 13.5px;
+            color: var(--text); transition: background .12s; }
+.nav-item:hover { background: var(--bg); }
+.nav-item.active { background: #eff6ff; color: var(--accent); font-weight: 600; }
+.nav-item svg { width: 16px; height: 16px; flex-shrink: 0; }
 
-    .sidebar {
-      width: 220px;
-      flex-shrink: 0;
-      background: var(--surface);
-      border-right: 1px solid var(--border);
-      display: flex;
-      flex-direction: column;
-      position: fixed;
-      top: 0; left: 0; bottom: 0;
-      z-index: 10;
-    }
+/* ── MAIN ── */
+.main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+.section { display: none; flex: 1; flex-direction: column; }
+.section.active { display: flex; }
+.section-header { padding: 24px 28px 16px; border-bottom: 1px solid var(--border);
+                  background: var(--surface); display: flex; align-items: center;
+                  justify-content: space-between; gap: 12px; flex-shrink: 0; }
+.section-header h1 { font-size: 18px; font-weight: 700; }
+.section-body { padding: 20px 28px; flex: 1; overflow-y: auto; }
 
-    .sidebar-header {
-      padding: 20px 18px 16px;
-      border-bottom: 1px solid var(--border);
-    }
-    .sidebar-header .logo {
-      font-family: 'DM Mono', monospace;
-      font-size: 11px;
-      font-weight: 500;
-      letter-spacing: .06em;
-      text-transform: uppercase;
-      color: var(--accent);
-      margin-bottom: 2px;
-    }
-    .sidebar-header h1 {
-      font-size: 15px;
-      font-weight: 600;
-      color: var(--text);
-      line-height: 1.3;
-    }
+/* ── BUTTONS ── */
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px;
+       border-radius: 6px; border: none; cursor: pointer; font-size: 13px;
+       font-weight: 500; transition: background .12s, opacity .12s; }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent-h); }
+.btn-secondary { background: var(--bg); color: var(--text); border: 1px solid var(--border); }
+.btn-secondary:hover { background: var(--border); }
+.btn-danger { background: #fee2e2; color: var(--red); }
+.btn-danger:hover { background: #fecaca; }
+.btn-sm { padding: 4px 10px; font-size: 12px; }
+.btn-icon { padding: 5px; background: transparent; border: 1px solid var(--border);
+            border-radius: 6px; cursor: pointer; color: var(--muted);
+            transition: background .12s; }
+.btn-icon:hover { background: var(--bg); }
+.btn-icon svg { width: 14px; height: 14px; display: block; }
 
-    nav { padding: 10px 8px; flex: 1; }
-    .nav-section {
-      font-family: 'DM Mono', monospace;
-      font-size: 10px;
-      font-weight: 500;
-      letter-spacing: .08em;
-      text-transform: uppercase;
-      color: var(--text3);
-      padding: 10px 10px 4px;
-    }
-    .nav-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 7px 10px;
-      border-radius: var(--radius);
-      cursor: pointer;
-      color: var(--text2);
-      font-size: 13.5px;
-      font-weight: 400;
-      transition: background .12s, color .12s;
-      user-select: none;
-    }
-    .nav-item:hover { background: var(--surface2); color: var(--text); }
-    .nav-item.active { background: var(--accent-bg); color: var(--accent); font-weight: 500; }
-    .nav-item svg { flex-shrink: 0; opacity: .7; }
-    .nav-item.active svg { opacity: 1; }
+/* ── CARDS / LIST ── */
+.card { background: var(--surface); border: 1px solid var(--border);
+        border-radius: var(--radius); box-shadow: var(--shadow); margin-bottom: 12px; }
+.card-header { padding: 14px 18px; display: flex; align-items: center;
+               justify-content: space-between; border-bottom: 1px solid var(--border); }
+.card-title { font-weight: 600; font-size: 14px; }
+.card-body { padding: 16px 18px; }
 
-    .sidebar-footer {
-      padding: 12px 18px;
-      border-top: 1px solid var(--border);
-    }
-    .status-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      font-family: 'DM Mono', monospace;
-      font-size: 11px;
-      color: var(--text3);
-    }
-    .status-dot {
-      width: 6px; height: 6px;
-      border-radius: 50%;
-      background: var(--border2);
-    }
-    .status-dot.ok { background: var(--green); }
+.item-row { display: flex; align-items: center; justify-content: space-between;
+            padding: 9px 14px; border-radius: 6px; cursor: pointer;
+            transition: background .1s; margin-bottom: 2px; }
+.item-row:hover { background: var(--bg); }
+.item-row.active { background: #eff6ff; }
+.item-name { font-weight: 500; font-size: 13.5px; }
+.item-meta { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
+.item-actions { display: flex; gap: 4px; opacity: 0; transition: opacity .1s; }
+.item-row:hover .item-actions { opacity: 1; }
 
-    .main {
-      margin-left: 220px;
-      flex: 1;
-      padding: 32px 36px;
-      max-width: 960px;
-    }
+/* ── TWO-COLUMN LAYOUT ── */
+.split { display: grid; grid-template-columns: 260px 1fr; gap: 20px; }
+.list-panel { background: var(--surface); border: 1px solid var(--border);
+              border-radius: var(--radius); overflow: hidden; }
+.list-panel-header { padding: 12px 14px; border-bottom: 1px solid var(--border);
+                     display: flex; align-items: center; justify-content: space-between;
+                     background: var(--bg); }
+.list-panel-title { font-weight: 600; font-size: 13px; color: var(--muted);
+                    text-transform: uppercase; letter-spacing: .05em; }
+.list-panel-body { overflow-y: auto; max-height: calc(100vh - 160px); padding: 6px; }
+.detail-panel { background: var(--surface); border: 1px solid var(--border);
+                border-radius: var(--radius); overflow: hidden; }
+.detail-header { padding: 14px 18px; border-bottom: 1px solid var(--border);
+                 display: flex; align-items: center; justify-content: space-between;
+                 background: var(--bg); }
+.detail-body { padding: 20px; overflow-y: auto; max-height: calc(100vh - 160px); }
 
-    /* ── SECTIONS ── */
-    .section { display: none; }
-    .section.active { display: block; }
+/* ── FORMS ── */
+.form-group { margin-bottom: 16px; }
+.form-label { display: block; font-size: 12px; font-weight: 600; color: var(--muted);
+              text-transform: uppercase; letter-spacing: .05em; margin-bottom: 5px; }
+.form-input, .form-select { width: 100%; padding: 8px 10px; border: 1px solid var(--border);
+                             border-radius: 6px; font-size: 13.5px; background: var(--surface);
+                             color: var(--text); transition: border-color .15s; }
+.form-input:focus, .form-select:focus { outline: none; border-color: var(--accent); }
+.form-input.error { border-color: var(--red); }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.form-hint { font-size: 11.5px; color: var(--muted); margin-top: 4px; }
+.form-error { font-size: 12px; color: var(--red); margin-top: 4px; }
 
-    .page-header { margin-bottom: 24px; }
-    .page-header h2 {
-      font-size: 20px;
-      font-weight: 600;
-      color: var(--text);
-      margin-bottom: 4px;
-    }
-    .page-header p { color: var(--text2); font-size: 13px; }
+/* ── STATUS CARDS ── */
+.status-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+               gap: 14px; }
+.status-card { background: var(--surface); border: 1px solid var(--border);
+               border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); }
+.status-card.l1 { border-color: var(--l1); background: #eff6ff; }
+.status-card.l2 { border-color: var(--l2); background: #f5f3ff; }
+.status-label { font-size: 11px; font-weight: 700; text-transform: uppercase;
+                letter-spacing: .07em; color: var(--muted); margin-bottom: 6px; }
+.status-value { font-size: 18px; font-weight: 700; }
+.status-sub { font-size: 12px; color: var(--muted); margin-top: 3px; }
 
-    /* ── CARDS ── */
-    .card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      box-shadow: var(--shadow);
-      margin-bottom: 16px;
-    }
-    .card-header {
-      padding: 14px 18px;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-    }
-    .card-header h3 {
-      font-size: 13.5px;
-      font-weight: 600;
-      color: var(--text);
-    }
-    .card-body { padding: 16px 18px; }
+/* ── ZONE EDITOR ── */
+.zone-list { display: flex; flex-direction: column; gap: 8px; }
+.zone-card { border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.zone-card-header { display: flex; align-items: center; justify-content: space-between;
+                    padding: 8px 12px; background: var(--bg); cursor: pointer; }
+.zone-card-title { font-weight: 600; font-size: 13px; }
+.zone-card-body { padding: 14px; border-top: 1px solid var(--border); }
 
-    /* ── STATUS SECTION ── */
-    .status-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-      margin-bottom: 16px;
-    }
-    .status-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      padding: 16px 18px;
-      box-shadow: var(--shadow);
-    }
-    .status-card .label {
-      font-family: 'DM Mono', monospace;
-      font-size: 10px;
-      font-weight: 500;
-      letter-spacing: .07em;
-      text-transform: uppercase;
-      color: var(--text3);
-      margin-bottom: 6px;
-    }
-    .status-card .value {
-      font-size: 15px;
-      font-weight: 600;
-      color: var(--text);
-    }
-    .status-card .sub {
-      font-size: 12px;
-      color: var(--text2);
-      margin-top: 2px;
-      font-family: 'DM Mono', monospace;
-    }
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      padding: 2px 8px;
-      border-radius: 20px;
-      font-size: 11.5px;
-      font-weight: 500;
-      font-family: 'DM Mono', monospace;
-    }
-    .badge-green { background: var(--green-bg); color: var(--green); }
-    .badge-amber { background: var(--amber-bg); color: var(--amber); }
-    .badge-blue  { background: var(--accent-bg); color: var(--accent); }
-    .badge-gray  { background: var(--surface2); color: var(--text2); }
+/* ── SLOTS TABLE ── */
+.slots-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.slots-table th { text-align: left; font-size: 11px; font-weight: 600;
+                  text-transform: uppercase; letter-spacing: .05em;
+                  color: var(--muted); padding: 4px 8px; }
+.slots-table td { padding: 3px 4px; }
+.slots-table td input { width: 100%; padding: 4px 6px; border: 1px solid var(--border);
+                         border-radius: 4px; font-size: 13px; font-family: var(--mono); }
+.slots-table td input:focus { outline: none; border-color: var(--accent); }
+.slot-del { background: none; border: none; cursor: pointer; color: var(--muted);
+            padding: 2px 4px; border-radius: 4px; font-size: 14px; }
+.slot-del:hover { background: #fee2e2; color: var(--red); }
 
-    .exception-item {
-      background: var(--amber-bg);
-      border: 1px solid #f5d89a;
-      border-radius: var(--radius);
-      padding: 10px 14px;
-      margin-bottom: 8px;
-    }
-    .exception-item .exc-name {
-      font-weight: 600;
-      font-size: 13px;
-      color: var(--amber);
-    }
-    .exception-item .exc-period {
-      font-family: 'DM Mono', monospace;
-      font-size: 11px;
-      color: var(--text2);
-      margin-top: 2px;
-    }
+/* ── EVENTS TABLE ── */
+.events-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.events-table th { text-align: left; font-size: 11px; font-weight: 600;
+                   text-transform: uppercase; letter-spacing: .05em;
+                   color: var(--muted); padding: 5px 6px;
+                   border-bottom: 1px solid var(--border); }
+.events-table td { padding: 4px 4px; border-bottom: 1px solid var(--bg); }
+.events-table select, .events-table input { padding: 4px 6px; border: 1px solid var(--border);
+  border-radius: 4px; font-size: 13px; }
+.events-table select:focus, .events-table input:focus { outline: none; border-color: var(--accent); }
+.level-badge { display: inline-block; padding: 2px 8px; border-radius: 10px;
+               font-size: 11px; font-weight: 700; }
+.level-badge.l1 { background: #dbeafe; color: var(--l1); }
+.level-badge.l2 { background: #ede9fe; color: var(--l2); }
 
-    /* ── LIST ── */
-    .item-list { display: flex; flex-direction: column; gap: 2px; }
-    .item-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 8px 12px;
-      border-radius: var(--radius);
-      cursor: pointer;
-      transition: background .1s;
-    }
-    .item-row:hover { background: var(--surface2); }
-    .item-row.selected { background: var(--accent-bg); }
-    .item-row .item-name {
-      font-size: 13.5px;
-      font-weight: 500;
-      font-family: 'DM Mono', monospace;
-    }
-    .item-row .item-meta { font-size: 12px; color: var(--text3); }
+/* ── MODAL ── */
+.modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.35);
+                 z-index: 100; align-items: center; justify-content: center; }
+.modal-overlay.open { display: flex; }
+.modal { background: var(--surface); border-radius: var(--radius); padding: 24px;
+         min-width: 360px; max-width: 500px; width: 90%; box-shadow: 0 8px 30px rgba(0,0,0,.2); }
+.modal-title { font-size: 16px; font-weight: 700; margin-bottom: 16px; }
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
 
-    /* ── BUTTONS ── */
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 14px;
-      border-radius: var(--radius);
-      font-family: 'DM Sans', sans-serif;
-      font-size: 13px;
-      font-weight: 500;
-      cursor: pointer;
-      border: 1px solid transparent;
-      transition: background .12s, box-shadow .12s, border-color .12s;
-      white-space: nowrap;
-    }
-    .btn-primary {
-      background: var(--accent);
-      color: #fff;
-      border-color: var(--accent);
-    }
-    .btn-primary:hover { background: #2251c5; }
-    .btn-secondary {
-      background: var(--surface);
-      color: var(--text);
-      border-color: var(--border2);
-    }
-    .btn-secondary:hover { background: var(--surface2); border-color: var(--border2); }
-    .btn-danger {
-      background: var(--surface);
-      color: var(--red);
-      border-color: #f0b8b2;
-    }
-    .btn-danger:hover { background: var(--red-bg); }
-    .btn-sm { padding: 4px 10px; font-size: 12px; }
-    .btn-group { display: flex; gap: 6px; }
+/* ── ALERTS ── */
+.alert { padding: 10px 14px; border-radius: 6px; font-size: 13px; margin-bottom: 12px; }
+.alert-warn { background: var(--warn-bg); border: 1px solid var(--warn-bd); color: #92400e; }
+.alert-error { background: #fee2e2; border: 1px solid #fca5a5; color: var(--red); }
+.alert-ok { background: #dcfce7; border: 1px solid #86efac; color: var(--green); }
 
-    /* ── EDITOR LAYOUT ── */
-    .editor-layout {
-      display: grid;
-      grid-template-columns: 220px 1fr;
-      gap: 16px;
-      align-items: start;
-    }
-    .editor-panel {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      box-shadow: var(--shadow);
-      overflow: hidden;
-    }
-    .editor-panel-header {
-      padding: 12px 14px;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    .editor-panel-header span {
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--text2);
-      text-transform: uppercase;
-      letter-spacing: .05em;
-      font-family: 'DM Mono', monospace;
-    }
+/* ── BADGE ── */
+.badge { display: inline-block; padding: 2px 7px; border-radius: 10px; font-size: 11px;
+         font-weight: 600; }
+.badge-blue   { background: #dbeafe; color: var(--l1); }
+.badge-purple { background: #ede9fe; color: var(--l2); }
+.badge-gray   { background: var(--bg); color: var(--muted); border: 1px solid var(--border); }
+.badge-green  { background: #dcfce7; color: var(--green); }
+.badge-orange { background: #fef3c7; color: var(--orange); }
 
-    /* ── FORM ── */
-    .form-group { margin-bottom: 14px; }
-    .form-label {
-      display: block;
-      font-size: 12px;
-      font-weight: 500;
-      color: var(--text2);
-      margin-bottom: 5px;
-      font-family: 'DM Mono', monospace;
-      text-transform: uppercase;
-      letter-spacing: .05em;
-    }
-    .form-input, .form-select {
-      width: 100%;
-      padding: 7px 10px;
-      border: 1px solid var(--border2);
-      border-radius: var(--radius);
-      font-family: 'DM Sans', sans-serif;
-      font-size: 13.5px;
-      color: var(--text);
-      background: var(--surface);
-      transition: border-color .15s, box-shadow .15s;
-      appearance: none;
-    }
-    .form-input:focus, .form-select:focus {
-      outline: none;
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px rgba(42,91,215,.1);
-    }
-    .form-select {
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b6960' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
-      background-repeat: no-repeat;
-      background-position: right 10px center;
-      padding-right: 30px;
-    }
-    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+/* ── DIVIDER ── */
+.divider { height: 1px; background: var(--border); margin: 16px 0; }
 
-    /* ── TABLE / SCHEDULE GRID ── */
-    .schedule-table { width: 100%; border-collapse: collapse; }
-    .schedule-table th {
-      text-align: left;
-      font-family: 'DM Mono', monospace;
-      font-size: 10.5px;
-      font-weight: 500;
-      text-transform: uppercase;
-      letter-spacing: .06em;
-      color: var(--text3);
-      padding: 8px 10px;
-      border-bottom: 1px solid var(--border);
-    }
-    .schedule-table td {
-      padding: 7px 10px;
-      border-bottom: 1px solid var(--border);
-      font-size: 13px;
-      vertical-align: middle;
-    }
-    .schedule-table tr:last-child td { border-bottom: none; }
-    .schedule-table tr:hover td { background: var(--surface2); }
-    .schedule-table td code {
-      font-family: 'DM Mono', monospace;
-      font-size: 12px;
-      background: var(--surface2);
-      padding: 1px 6px;
-      border-radius: 4px;
-    }
+/* ── TOAST ── */
+.toast { position: fixed; bottom: 24px; right: 24px; padding: 10px 18px;
+         border-radius: 8px; font-size: 13.5px; font-weight: 500;
+         background: var(--text); color: #fff; opacity: 0;
+         transform: translateY(8px); transition: opacity .2s, transform .2s;
+         pointer-events: none; z-index: 200; }
+.toast.show { opacity: 1; transform: translateY(0); }
+.toast.ok  { background: var(--green); }
+.toast.err { background: var(--red); }
 
-    /* ── ZONE SLOTS ── */
-    .zone-section { margin-bottom: 20px; }
-    .zone-section-title {
-      font-size: 12px;
-      font-weight: 600;
-      font-family: 'DM Mono', monospace;
-      text-transform: uppercase;
-      letter-spacing: .06em;
-      color: var(--text3);
-      padding: 10px 0 6px;
-      border-bottom: 1px solid var(--border);
-      margin-bottom: 10px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
+/* ── EMPTY STATE ── */
+.empty { text-align: center; padding: 40px 20px; color: var(--muted); }
+.empty-icon { font-size: 32px; margin-bottom: 10px; }
+.empty-text { font-size: 14px; }
 
-    .slot-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 5px 0;
-      border-bottom: 1px solid var(--border);
-    }
-    .slot-row:last-child { border-bottom: none; }
-    .slot-time {
-      font-family: 'DM Mono', monospace;
-      font-size: 12px;
-      font-weight: 500;
-      color: var(--text);
-      width: 52px;
-    }
-    .slot-temp {
-      font-family: 'DM Mono', monospace;
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--accent);
-      width: 52px;
-    }
-    .slot-input {
-      width: 70px;
-      padding: 3px 7px;
-      border: 1px solid var(--border2);
-      border-radius: 4px;
-      font-family: 'DM Mono', monospace;
-      font-size: 12px;
-      color: var(--text);
-      background: var(--surface);
-    }
-    .slot-input:focus {
-      outline: none;
-      border-color: var(--accent);
-      box-shadow: 0 0 0 2px rgba(42,91,215,.1);
-    }
-    .slot-del {
-      background: none;
-      border: none;
-      color: var(--text3);
-      cursor: pointer;
-      padding: 2px 4px;
-      border-radius: 4px;
-      line-height: 1;
-      font-size: 14px;
-      transition: color .1s, background .1s;
-    }
-    .slot-del:hover { color: var(--red); background: var(--red-bg); }
+/* ── TIMETABLE TABS ── */
+.tt-tabs { display: flex; gap: 4px; margin-bottom: 10px; flex-wrap: wrap; }
+.tt-tab { padding: 4px 10px; border-radius: 5px; font-size: 12px; cursor: pointer;
+          border: 1px solid var(--border); background: var(--bg); color: var(--text); }
+.tt-tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 
-    /* ── TABS ── */
-    .tabs {
-      display: flex;
-      gap: 2px;
-      background: var(--surface2);
-      padding: 3px;
-      border-radius: var(--radius);
-      margin-bottom: 16px;
-      width: fit-content;
-    }
-    .tab {
-      padding: 5px 14px;
-      border-radius: 4px;
-      font-size: 13px;
-      font-weight: 500;
-      cursor: pointer;
-      color: var(--text2);
-      transition: background .1s, color .1s;
-    }
-    .tab.active {
-      background: var(--surface);
-      color: var(--text);
-      box-shadow: var(--shadow);
-    }
-
-    /* ── TOAST ── */
-    #toast {
-      position: fixed;
-      bottom: 24px;
-      right: 24px;
-      background: var(--text);
-      color: #fff;
-      padding: 10px 16px;
-      border-radius: var(--radius);
-      font-size: 13px;
-      font-weight: 500;
-      box-shadow: var(--shadow-md);
-      opacity: 0;
-      transform: translateY(8px);
-      transition: opacity .2s, transform .2s;
-      pointer-events: none;
-      z-index: 100;
-    }
-    #toast.show { opacity: 1; transform: translateY(0); }
-    #toast.success { background: var(--green); }
-    #toast.error   { background: var(--red); }
-
-    /* ── EMPTY STATE ── */
-    .empty {
-      text-align: center;
-      padding: 40px 20px;
-      color: var(--text3);
-    }
-    .empty svg { margin-bottom: 10px; opacity: .4; }
-    .empty p { font-size: 13px; }
-
-    /* ── DIVIDER ── */
-    .divider { height: 1px; background: var(--border); margin: 16px 0; }
-
-    /* ── MODAL ── */
-    .modal-overlay {
-      position: fixed; inset: 0;
-      background: rgba(0,0,0,.35);
-      display: flex; align-items: center; justify-content: center;
-      z-index: 50;
-      opacity: 0; pointer-events: none;
-      transition: opacity .2s;
-    }
-    .modal-overlay.open { opacity: 1; pointer-events: all; }
-    .modal {
-      background: var(--surface);
-      border-radius: var(--radius-lg);
-      box-shadow: var(--shadow-md);
-      width: 440px;
-      max-width: 95vw;
-      padding: 24px;
-      transform: translateY(10px);
-      transition: transform .2s;
-    }
-    .modal-overlay.open .modal { transform: translateY(0); }
-    .modal h3 { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
-    .modal-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
-
-    /* ── PLANNING EVENT TABLE ── */
-    .event-add-row {
-      background: var(--surface2);
-      border-radius: var(--radius);
-      padding: 12px 14px;
-      margin-bottom: 12px;
-    }
-
-    /* ── LOADING ── */
-    .spinner {
-      display: inline-block;
-      width: 14px; height: 14px;
-      border: 2px solid var(--border2);
-      border-top-color: var(--accent);
-      border-radius: 50%;
-      animation: spin .6s linear infinite;
-      vertical-align: middle;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    .loading-placeholder {
-      height: 80px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: var(--text3);
-      font-size: 13px;
-      gap: 8px;
-    }
-  </style>
+.hidden { display: none !important; }
+</style>
 </head>
 <body>
 
-<div class="app">
+<!-- SIDEBAR -->
+<nav class="sidebar">
+  <div class="sidebar-title">Tado Planning</div>
+  <div class="nav-section">Overview</div>
+  <div class="nav-item active" data-section="status" onclick="showSection('status')">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+      <circle cx="8" cy="8" r="6"/><path d="M8 5v3l2 1.5"/>
+    </svg>
+    Active status
+  </div>
+  <div class="nav-section">Configuration</div>
+  <div class="nav-item" data-section="weekconfigs" onclick="showSection('weekconfigs')">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+      <rect x="2" y="3" width="12" height="10" rx="1"/>
+      <path d="M5 7h6M5 10h4"/>
+    </svg>
+    Weekconfigs
+  </div>
+  <div class="nav-item" data-section="plannings" onclick="showSection('plannings')">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+      <rect x="2" y="2" width="12" height="12" rx="1"/>
+      <path d="M5 2v12M2 6h3M2 10h3"/>
+    </svg>
+    Plannings
+  </div>
+</nav>
 
-  <!-- SIDEBAR -->
-  <aside class="sidebar">
-    <div class="sidebar-header">
-      <div class="logo">Tado Planning</div>
-      <h1>Configuration</h1>
+<!-- MAIN -->
+<main class="main">
+
+  <!-- ── STATUS ── -->
+  <section class="section active" id="sec-status">
+    <div class="section-header">
+      <h1>Active status</h1>
+      <button class="btn btn-secondary btn-sm" onclick="loadStatus()">↻ Refresh</button>
     </div>
-    <nav>
-      <div class="nav-section">Overview</div>
-      <div class="nav-item active" onclick="showSection('status')">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-        Active status
-      </div>
-      <div class="nav-section">Configuration</div>
-      <div class="nav-item" onclick="showSection('weekconfigs')">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-        Weekconfigs
-      </div>
-      <div class="nav-item" onclick="showSection('planning')">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-        Planning
-      </div>
-    </nav>
-    <div class="sidebar-footer">
-      <div class="status-pill">
-        <div class="status-dot" id="conn-dot"></div>
-        <span id="conn-label">Connecting…</span>
+    <div class="section-body" id="statusBody">
+      <div class="empty"><div class="empty-icon">⏳</div><div class="empty-text">Loading...</div></div>
+    </div>
+  </section>
+
+  <!-- ── WEEKCONFIGS ── -->
+  <section class="section" id="sec-weekconfigs">
+    <div class="section-header">
+      <h1>Weekconfigs</h1>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-secondary btn-sm" onclick="openModal('wc-new')">+ New</button>
+        <button class="btn btn-secondary btn-sm" onclick="openModal('wc-copy-from')">⎘ Copy</button>
       </div>
     </div>
-  </aside>
-
-  <!-- MAIN -->
-  <main class="main">
-
-    <!-- ── STATUS ── -->
-    <section class="section active" id="sec-status">
-      <div class="page-header">
-        <h2>Active status</h2>
-        <p>Configuration currently applied by tado_planning.py</p>
-      </div>
-      <div id="status-content">
-        <div class="loading-placeholder"><span class="spinner"></span> Loading…</div>
-      </div>
-    </section>
-
-    <!-- ── WEEKCONFIGS ── -->
-    <section class="section" id="sec-weekconfigs">
-      <div class="page-header">
-        <h2>Weekconfigs</h2>
-        <p>Weekly configuration files — temperatures per zone and time slot</p>
-      </div>
-      <div class="editor-layout">
-        <div class="editor-panel">
-          <div class="editor-panel-header">
-            <span>Files</span>
-            <button class="btn btn-primary btn-sm" onclick="newWeekconfig()">+ New</button>
+    <div class="section-body">
+      <div class="split">
+        <div class="list-panel">
+          <div class="list-panel-header">
+            <span class="list-panel-title">Configs</span>
           </div>
-          <div id="weekconfig-list" class="item-list" style="padding:6px 6px;">
-            <div class="loading-placeholder"><span class="spinner"></span></div>
-          </div>
+          <div class="list-panel-body" id="wcList"></div>
         </div>
-        <div>
-          <div id="weekconfig-editor">
-            <div class="empty">
-              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-              <p>Select a file to edit</p>
+        <div class="detail-panel">
+          <div class="detail-header" id="wcDetailHeader" style="display:none">
+            <span id="wcDetailName" style="font-weight:600;font-size:14px"></span>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-secondary btn-sm" onclick="wcRename()">Rename</button>
+              <button class="btn btn-secondary btn-sm" onclick="wcCopyZone()">+ Copy zone</button>
+              <button class="btn btn-secondary btn-sm" onclick="wcAddZone()">+ Zone</button>
+              <button class="btn btn-danger btn-sm" onclick="wcDelete()">Delete</button>
+              <button class="btn btn-primary btn-sm" onclick="wcSave()">Save</button>
             </div>
           </div>
+          <div class="detail-body" id="wcDetail">
+            <div class="empty"><div class="empty-icon">📋</div>
+              <div class="empty-text">Select a config to edit</div></div>
+          </div>
         </div>
       </div>
-    </section>
+    </div>
+  </section>
 
-    <!-- ── PLANNING ── -->
-    <section class="section" id="sec-planning">
-      <div class="page-header">
-        <h2>Planning</h2>
-        <p>Standard planning and exception overrides — odd/even week cycle</p>
+  <!-- ── PLANNINGS ── -->
+  <section class="section" id="sec-plannings">
+    <div class="section-header">
+      <h1>Plannings</h1>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-secondary btn-sm" onclick="openModal('pl-new')">+ New</button>
+        <button class="btn btn-secondary btn-sm" onclick="openModal('pl-copy-from')">⎘ Copy</button>
       </div>
-      <div class="editor-layout">
-        <div class="editor-panel">
-          <div class="editor-panel-header">
-            <span>Files</span>
-            <button class="btn btn-primary btn-sm" onclick="newException()">+ New</button>
+    </div>
+    <div class="section-body">
+      <div class="split">
+        <div class="list-panel">
+          <div class="list-panel-header">
+            <span class="list-panel-title">Plannings</span>
           </div>
-          <div id="planning-list" class="item-list" style="padding:6px 6px;">
-            <div class="loading-placeholder"><span class="spinner"></span></div>
-          </div>
+          <div class="list-panel-body" id="plList"></div>
         </div>
-        <div>
-          <div id="planning-editor">
-            <div class="empty">
-              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-              <p>Select a planning to edit</p>
+        <div class="detail-panel">
+          <div class="detail-header" id="plDetailHeader" style="display:none">
+            <span id="plDetailName" style="font-weight:600;font-size:14px"></span>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-secondary btn-sm" onclick="plRename()">Rename</button>
+              <button class="btn btn-danger btn-sm" onclick="plDelete()">Delete</button>
+              <button class="btn btn-primary btn-sm" onclick="plSave()">Save</button>
             </div>
           </div>
+          <div id="plValidationBar"></div>
+          <div class="detail-body" id="plDetail">
+            <div class="empty"><div class="empty-icon">📅</div>
+              <div class="empty-text">Select a planning to edit</div></div>
+          </div>
         </div>
       </div>
-    </section>
+    </div>
+  </section>
 
-  </main>
-</div>
-
-<!-- MODAL — New weekconfig -->
-<div class="modal-overlay" id="modal-new-wc">
-  <div class="modal">
-    <h3>New weekconfig</h3>
-    <div class="form-group">
-      <label class="form-label">File name</label>
-      <input class="form-input" id="new-wc-name" placeholder="e.g. standard, holidays, kids…" />
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeModal('modal-new-wc')">Cancel</button>
-      <button class="btn btn-primary" onclick="createWeekconfig()">Create</button>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL — New exception -->
-<div class="modal-overlay" id="modal-new-exc">
-  <div class="modal">
-    <h3>New exception</h3>
-    <div class="form-group">
-      <label class="form-label">Name (slug)</label>
-      <input class="form-input" id="new-exc-name" placeholder="e.g. xmas2026, easter_holidays…" />
-    </div>
-    <div class="form-group">
-      <label class="form-label">Description</label>
-      <input class="form-input" id="new-exc-desc" placeholder="e.g. Christmas holidays 2026" />
-    </div>
-    <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">Start</label>
-        <input class="form-input" type="datetime-local" id="new-exc-start" />
-      </div>
-      <div class="form-group">
-        <label class="form-label">End</label>
-        <input class="form-input" type="datetime-local" id="new-exc-end" />
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeModal('modal-new-exc')">Cancel</button>
-      <button class="btn btn-primary" onclick="createException()">Create</button>
-    </div>
-  </div>
-</div>
+</main>
 
 <!-- TOAST -->
-<div id="toast"></div>
+<div id="toast" class="toast"></div>
+
+<!-- MODALS -->
+<div class="modal-overlay" id="modal-wc-new">
+  <div class="modal">
+    <div class="modal-title">New weekconfig</div>
+    <div class="form-group">
+      <label class="form-label">Name</label>
+      <input class="form-input" id="wc-new-name" placeholder="e.g. kidsaway_summer">
+      <div class="form-error" id="wc-new-err"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('wc-new')">Cancel</button>
+      <button class="btn btn-primary" onclick="wcCreateNew()">Create</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-wc-copy-from">
+  <div class="modal">
+    <div class="modal-title">Copy weekconfig</div>
+    <div class="form-group">
+      <label class="form-label">Source</label>
+      <select class="form-select" id="wc-copy-src"></select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">New name</label>
+      <input class="form-input" id="wc-copy-name" placeholder="new config name">
+      <div class="form-error" id="wc-copy-err"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('wc-copy-from')">Cancel</button>
+      <button class="btn btn-primary" onclick="wcCopyConfig()">Copy</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-wc-add-zone">
+  <div class="modal">
+    <div class="modal-title">Add zone</div>
+    <div class="form-group">
+      <label class="form-label">Zone name (Tado internal name)</label>
+      <input class="form-input" id="wc-zone-name" placeholder="e.g. salon_tv">
+      <div class="form-hint">Use underscores, lowercase. Must match your Tado zone name.</div>
+      <div class="form-error" id="wc-zone-err"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('wc-add-zone')">Cancel</button>
+      <button class="btn btn-primary" onclick="wcConfirmAddZone()">Add</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-wc-copy-zone">
+  <div class="modal">
+    <div class="modal-title">Copy zone from another config</div>
+    <div class="form-group">
+      <label class="form-label">Source config</label>
+      <select class="form-select" id="wc-cz-config" onchange="wcCopyZoneConfigChanged()"></select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Zone</label>
+      <select class="form-select" id="wc-cz-zone"></select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Destination zone name</label>
+      <input class="form-input" id="wc-cz-dest" placeholder="leave empty to keep same name">
+    </div>
+    <div class="form-error" id="wc-cz-err"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('wc-copy-zone')">Cancel</button>
+      <button class="btn btn-primary" onclick="wcConfirmCopyZone()">Copy</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-rename">
+  <div class="modal">
+    <div class="modal-title" id="rename-title">Rename</div>
+    <div class="form-group">
+      <label class="form-label">New name</label>
+      <input class="form-input" id="rename-input">
+      <div class="form-error" id="rename-err"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('rename')">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmRename()">Rename</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-confirm">
+  <div class="modal">
+    <div class="modal-title" id="confirm-title">Confirm</div>
+    <div id="confirm-body" style="font-size:14px;color:var(--muted);margin-bottom:4px"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('confirm')">Cancel</button>
+      <button class="btn btn-danger" id="confirm-ok" onclick="">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-pl-new">
+  <div class="modal">
+    <div class="modal-title">New planning</div>
+    <div class="form-group">
+      <label class="form-label">Name</label>
+      <input class="form-input" id="pl-new-name" placeholder="e.g. summer2026">
+      <div class="form-error" id="pl-new-err"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('pl-new')">Cancel</button>
+      <button class="btn btn-primary" onclick="plCreateNew()">Create</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-pl-copy-from">
+  <div class="modal">
+    <div class="modal-title">Copy planning</div>
+    <div class="form-group">
+      <label class="form-label">Source</label>
+      <select class="form-select" id="pl-copy-src"></select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">New name</label>
+      <input class="form-input" id="pl-copy-name" placeholder="new planning name">
+      <div class="form-error" id="pl-copy-err"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('pl-copy-from')">Cancel</button>
+      <button class="btn btn-primary" onclick="plCopyPlanning()">Copy</button>
+    </div>
+  </div>
+</div>
 
 <script>
-// Ingress base path — injected by Flask, empty when accessed directly
-window.API_BASE = "{{ ingress_path }}";
-</script>
-<script>
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────
 // GLOBALS
-// ─────────────────────────────────────────────
-let allZones = [];
-let currentWeekconfig = null;
-let currentWeekconfigs = {};
-let currentPlanningName = null;   // 'standard' or exception file name
-let currentPlanningData = null;   // full JSON object
-let currentPlanningEvents = [];   // events array (ref into currentPlanningData)
+// ─────────────────────────────────────────────────────────────────────────
+window.API_BASE = "{{ ingress_path }}";
 
-// ─────────────────────────────────────────────
-// NAV
-// ─────────────────────────────────────────────
-function showSection(id) {
-  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  document.getElementById('sec-' + id).classList.add('active');
-  event.currentTarget.classList.add('active');
-  if (id === 'status')      loadStatus();
-  if (id === 'weekconfigs') loadWeekconfigs();
-  if (id === 'planning')    loadPlanningList();
-}
+const DAYS    = ["monday","tuesday","wednesday","thursday","friday","saturday","sunday"];
+const DAY_LBL = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+const CYCLES  = ["one-week","two-weeks-iso","two-weeks-seq"];
+const TT_KEYS = {
+  "Mon-Sun":           ["Mon-Sun"],
+  "Mon-Fri, Sat, Sun": ["Mon-Fri","Sat","Sun"],
+  "Mon, ..., Sun":     ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
+};
+const PREHEAT_OPTS = ["off","ECO","BALANCE","COMFORT"];
 
-// ─────────────────────────────────────────────
-// TOAST
-// ─────────────────────────────────────────────
-let toastTimer;
-function toast(msg, type = '') {
-  const el = document.getElementById('toast');
-  el.textContent = msg;
-  el.className = 'show ' + type;
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.className = '', 2500);
-}
+let state = {
+  wc: {},          // all weekconfigs
+  wcCurrent: null, // current config name being edited
+  wcData: null,    // deep copy of current config zones
 
-// ─────────────────────────────────────────────
-// MODAL
-// ─────────────────────────────────────────────
-function openModal(id) { document.getElementById(id).classList.add('open'); }
-function closeModal(id) { document.getElementById(id).classList.remove('open'); }
-document.querySelectorAll('.modal-overlay').forEach(m => {
-  m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); });
-});
+  pl: [],          // all plannings array
+  plCurrent: null, // current planning name
+  plData: null,    // deep copy of current planning
 
-// ─────────────────────────────────────────────
-// STATUS
-// ─────────────────────────────────────────────
-async function loadStatus() {
-  const el = document.getElementById('status-content');
-  el.innerHTML = '<div class="loading-placeholder"><span class="spinner"></span> Loading…</div>';
-  try {
-    const r = await fetch(window.API_BASE + '/api/status');
-    const d = await r.json();
-    if (d.error) { el.innerHTML = `<div class="empty"><p>Error: ${d.error}</p></div>`; return; }
+  renameTarget: null,  // {type:'wc'|'pl', name}
+  confirmCb: null,
+};
 
-    document.getElementById('conn-dot').className = 'status-dot ok';
-    document.getElementById('conn-label').textContent = 'Connected';
-
-    const parityBadge = d.parity === 'odd'
-      ? `<span class="badge badge-blue">Odd week</span>`
-      : `<span class="badge badge-green">Even week</span>`;
-
-    const l1 = d.level1 ? `<div class="status-card">
-      <div class="label">Level 1 — active config</div>
-      <div class="value"><code style="font-family:DM Mono,monospace;font-size:14px">${d.level1.config}</code></div>
-      <div class="sub">since ${d.level1.since}</div>
-    </div>` : `<div class="status-card"><div class="label">Level 1</div><div class="value" style="color:var(--text3)">—</div></div>`;
-
-    const l2 = d.level2 ? `<div class="status-card">
-      <div class="label">Level 2 — active config</div>
-      <div class="value"><code style="font-family:DM Mono,monospace;font-size:14px">${d.level2.config}</code></div>
-      <div class="sub">since ${d.level2.since}</div>
-    </div>` : `<div class="status-card"><div class="label">Level 2</div><div class="value" style="color:var(--text3)">—</div></div>`;
-
-    let excHtml = '';
-    if (d.exceptions && d.exceptions.length > 0) {
-      excHtml = d.exceptions.map(e => `
-        <div class="exception-item">
-          <div class="exc-name">⚠ ${e.description}</div>
-          <div class="exc-period">${e.period}</div>
-        </div>`).join('');
-    } else {
-      excHtml = `<div style="color:var(--text3);font-size:13px">No active exceptions</div>`;
-    }
-
-    el.innerHTML = `
-      <div class="card" style="margin-bottom:16px">
-        <div class="card-body" style="display:flex;align-items:center;justify-content:space-between">
-          <div>
-            <div style="font-size:13px;color:var(--text2);margin-bottom:4px">${d.now}</div>
-            <div style="display:flex;align-items:center;gap:8px">
-              <span style="font-family:DM Mono,monospace;font-size:13px">ISO week <strong>${d.iso_week}</strong></span>
-              ${parityBadge}
-            </div>
-          </div>
-          <button class="btn btn-secondary btn-sm" onclick="loadStatus()">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-            Refresh
-          </button>
-        </div>
-      </div>
-      <div class="status-grid">${l1}${l2}</div>
-      <div class="card">
-        <div class="card-header"><h3>Active exceptions</h3></div>
-        <div class="card-body">${excHtml}</div>
-      </div>`;
-  } catch(e) {
-    el.innerHTML = `<div class="empty"><p>Connection error: ${e.message}</p></div>`;
-    document.getElementById('conn-label').textContent = 'Offline';
+// ─────────────────────────────────────────────────────────────────────────
+// API HELPER
+// ─────────────────────────────────────────────────────────────────────────
+async function api(method, path, body) {
+  const opts = { method, headers: {} };
+  if (body !== undefined) {
+    opts.headers["Content-Type"] = "application/json";
+    opts.body = JSON.stringify(body);
   }
+  const r = await fetch(window.API_BASE + "/api" + path, opts);
+  const data = await r.json();
+  if (!r.ok && !data.exists) throw new Error(data.error || r.statusText);
+  return { ok: r.ok, status: r.status, data };
 }
 
-// ─────────────────────────────────────────────
-// WEEKCONFIGS
-// ─────────────────────────────────────────────
-async function loadWeekconfigs() {
-  const listEl = document.getElementById('weekconfig-list');
-  listEl.innerHTML = '<div class="loading-placeholder"><span class="spinner"></span></div>';
+// ─────────────────────────────────────────────────────────────────────────
+// TOAST
+// ─────────────────────────────────────────────────────────────────────────
+let _toastTimer;
+function toast(msg, type="") {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.className = `toast show ${type}`;
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.classList.remove("show"), 2800);
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// NAV
+// ─────────────────────────────────────────────────────────────────────────
+function showSection(id) {
+  document.querySelectorAll(".section").forEach(s => s.classList.remove("active"));
+  document.querySelectorAll(".nav-item").forEach(n => n.classList.remove("active"));
+  document.getElementById("sec-" + id).classList.add("active");
+  document.querySelector(`[data-section="${id}"]`).classList.add("active");
+  if (id === "status")      loadStatus();
+  if (id === "weekconfigs") loadWeekconfigs();
+  if (id === "plannings")   loadPlannings();
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// MODAL HELPERS
+// ─────────────────────────────────────────────────────────────────────────
+function openModal(id) {
+  document.getElementById("modal-" + id).classList.add("open");
+}
+function closeModal(id) {
+  document.getElementById("modal-" + id).classList.remove("open");
+}
+function confirm(title, body, cb) {
+  document.getElementById("confirm-title").textContent = title;
+  document.getElementById("confirm-body").textContent  = body;
+  document.getElementById("confirm-ok").onclick = () => { closeModal("confirm"); cb(); };
+  openModal("confirm");
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// STATUS
+// ─────────────────────────────────────────────────────────────────────────
+async function loadStatus() {
+  const el = document.getElementById("statusBody");
+  el.innerHTML = `<div class="empty"><div class="empty-icon">⏳</div><div class="empty-text">Loading...</div></div>`;
   try {
-    const r = await fetch(window.API_BASE + '/api/configs');
-    const d = await r.json();
-    if (!d.configs.length) {
-      listEl.innerHTML = '<div class="empty"><p>No files</p></div>';
+    const { data } = await api("GET", "/status");
+    if (data.error) {
+      el.innerHTML = `<div class="alert alert-error">${data.error}</div>`;
       return;
     }
-    listEl.innerHTML = d.configs.map(c => `
-      <div class="item-row" id="wc-row-${c}" onclick="selectWeekconfig('${c}')">
-        <span class="item-name">${c}</span>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text3)"><polyline points="9 18 15 12 9 6"/></svg>
-      </div>`).join('');
-  } catch(e) { listEl.innerHTML = `<div class="empty"><p>Error</p></div>`; }
+    let html = `<div class="status-grid">`;
+    html += `<div class="status-card">
+      <div class="status-label">Current time</div>
+      <div class="status-value" style="font-size:15px;font-family:var(--mono)">${data.now}</div>
+      <div class="status-sub">ISO week ${data.iso_week} — ${data.parity}</div>
+    </div>`;
+    html += `<div class="status-card">
+      <div class="status-label">Active planning</div>
+      <div class="status-value" style="font-size:15px">${data.planning}</div>
+      <div class="status-sub">cycle: ${data.cycle}</div>
+    </div>`;
+    if (data.level1) html += `<div class="status-card l1">
+      <div class="status-label">Level 1 config</div>
+      <div class="status-value">${data.level1.config}</div>
+      <div class="status-sub">since ${data.level1.since}</div>
+    </div>`;
+    if (data.level2) html += `<div class="status-card l2">
+      <div class="status-label">Level 2 config</div>
+      <div class="status-value">${data.level2.config}</div>
+      <div class="status-sub">since ${data.level2.since}</div>
+    </div>`;
+    html += `</div>`;
+    el.innerHTML = html;
+  } catch(e) {
+    el.innerHTML = `<div class="alert alert-error">Connection error: ${e.message}</div>`;
+  }
 }
 
-async function selectWeekconfig(name) {
-  document.querySelectorAll('[id^="wc-row-"]').forEach(r => r.classList.remove('selected'));
-  const row = document.getElementById('wc-row-' + name);
-  if (row) row.classList.add('selected');
-  currentWeekconfig = name;
+// ─────────────────────────────────────────────────────────────────────────
+// WEEKCONFIGS — LIST
+// ─────────────────────────────────────────────────────────────────────────
+async function loadWeekconfigs() {
+  try {
+    const { data } = await api("GET", "/weekconfigs");
+    state.wc = data.weekconfigs || {};
+    renderWcList();
+    if (state.wcCurrent && state.wc[state.wcCurrent]) {
+      selectWc(state.wcCurrent);
+    }
+  } catch(e) { toast(e.message, "err"); }
+}
 
-  const edEl = document.getElementById('weekconfig-editor');
-  edEl.innerHTML = '<div class="loading-placeholder"><span class="spinner"></span> Loading…</div>';
+function renderWcList() {
+  const el  = document.getElementById("wcList");
+  const names = Object.keys(state.wc);
+  if (!names.length) {
+    el.innerHTML = `<div class="empty"><div class="empty-text">No configs yet</div></div>`;
+    return;
+  }
+  el.innerHTML = names.map(n => `
+    <div class="item-row ${n === state.wcCurrent ? 'active' : ''}" onclick="selectWc('${n}')">
+      <div>
+        <div class="item-name">${n}</div>
+        <div class="item-meta">${Object.keys(state.wc[n]).length} zone(s)</div>
+      </div>
+    </div>`).join("");
+}
 
-  if (!allZones.length) {
-    try {
-      const r = await fetch(window.API_BASE + '/api/zones');
-      const d = await r.json();
-      allZones = d.zones || [];
-    } catch(e) {}
+function selectWc(name) {
+  state.wcCurrent = name;
+  state.wcData = JSON.parse(JSON.stringify(state.wc[name]));
+  renderWcList();
+  renderWcDetail();
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// WEEKCONFIGS — DETAIL
+// ─────────────────────────────────────────────────────────────────────────
+function renderWcDetail() {
+  const header = document.getElementById("wcDetailHeader");
+  const body   = document.getElementById("wcDetail");
+  if (!state.wcCurrent) {
+    header.style.display = "none";
+    body.innerHTML = `<div class="empty"><div class="empty-icon">📋</div><div class="empty-text">Select a config</div></div>`;
+    return;
+  }
+  header.style.display = "flex";
+  document.getElementById("wcDetailName").textContent = state.wcCurrent;
+  const zones = state.wcData;
+  if (!Object.keys(zones).length) {
+    body.innerHTML = `<div class="empty"><div class="empty-text">No zones. Click "+ Zone" to add one.</div></div>`;
+    return;
+  }
+  body.innerHTML = `<div class="zone-list">${Object.keys(zones).map(z => renderZoneCard(z, zones[z])).join("")}</div>`;
+}
+
+function renderZoneCard(zname, zcfg) {
+  const hasTT = !!zcfg.timetable;
+  const tt    = zcfg.timetable || "Mon-Sun";
+  const keys  = TT_KEYS[tt] || ["Mon-Sun"];
+
+  let slotsHtml = "";
+  if (hasTT) {
+    // Tab buttons for multi-key timetables
+    const tabBtns = keys.length > 1
+      ? `<div class="tt-tabs">${keys.map((k,i) =>
+          `<button class="tt-tab ${i===0?'active':''}" onclick="wcShowTab('${zname}','${k}',this)">${k}</button>`
+        ).join("")}</div>`
+      : "";
+
+    const slotPanes = keys.map((k,i) => `
+      <div id="zone-pane-${zname}-${k}" style="${i>0?'display:none':''}">
+        <table class="slots-table">
+          <tr><th>Start</th><th>Temp °C</th><th></th></tr>
+          ${(zcfg[k]||[]).map((s,si) => `
+          <tr>
+            <td><input value="${s.start}" oninput="wcSetSlot('${zname}','${k}',${si},'start',this.value)"></td>
+            <td><input type="number" step="0.5" value="${s.temp}" oninput="wcSetSlot('${zname}','${k}',${si},'temp',+this.value)"></td>
+            <td><button class="slot-del" onclick="wcDelSlot('${zname}','${k}',${si})">✕</button></td>
+          </tr>`).join("")}
+        </table>
+        <button class="btn btn-secondary btn-sm" style="margin-top:6px" onclick="wcAddSlot('${zname}','${k}')">+ Slot</button>
+      </div>`).join("");
+
+    slotsHtml = tabBtns + slotPanes;
   }
 
-  try {
-    const r = await fetch(window.API_BASE + `/api/configs/${name}`);
-    const data = await r.json();
-    currentWeekconfigs[name] = data;
-    renderWCEditor(name, data);
-  } catch(e) { edEl.innerHTML = `<div class="empty"><p>Load error</p></div>`; }
-}
-
-// ── Weekconfig helpers ──────────────────────────────────────────────────────
-
-const TIMETABLES = ['Mon-Sun', 'Mon-Fri, Sat, Sun', 'Mon, ..., Sun'];
-const TIMETABLE_LABELS = {
-  'Mon-Sun':          'Mon–Sun (same every day)',
-  'Mon-Fri, Sat, Sun':'Mon–Fri + Sat + Sun',
-  'Mon, ..., Sun':    'Mon, Tue, … Sun (7 independent days)',
-};
-const TIMETABLE_KEYS = {
-  'Mon-Sun':           ['Mon-Sun'],
-  'Mon-Fri, Sat, Sun': ['Mon-Fri', 'Sat', 'Sun'],
-  'Mon, ..., Sun':     ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-};
-const TIMETABLE_KEY_LABELS = {
-  'Mon-Sun': 'Mon → Sun', 'Mon-Fri': 'Mon → Fri',
-  'Sat': 'Sat', 'Sun': 'Sun',
-  'Mon': 'Mon', 'Tue': 'Tue', 'Wed': 'Wed',
-  'Thu': 'Thu', 'Fri': 'Fri',
-};
-const PREHEAT_OPTS  = ['off', 'eco', 'balance', 'comfort'];
-const ALL_DAY_KEYS  = ['Mon-Sun','Mon-Fri','Sat','Sun','Mon','Tue','Wed','Thu','Fri'];
-
-function wcData(name) { return currentWeekconfigs[name]; }
-
-function renderSlots(slots, cfg, zone, dayKey) {
-  if (!slots || !slots.length) return `<div style="color:var(--text3);font-size:12px;padding:4px 0">No slots</div>`;
-  return slots.map((s, i) => `
-    <div class="slot-row">
-      <input class="slot-input" value="${s.start}" placeholder="HH:MM"
-        onchange="updateSlotField('${cfg}','${zone}','${dayKey}',${i},'start',this.value)" style="width:64px">
-      <input class="slot-input" value="${s.temp}" type="number" step="0.5" min="5" max="25"
-        onchange="updateSlotField('${cfg}','${zone}','${dayKey}',${i},'temp',parseFloat(this.value))" style="width:58px">
-      <span style="font-size:11px;color:var(--text3)">°C</span>
-      <button class="slot-del" onclick="deleteSlotField('${cfg}','${zone}','${dayKey}',${i})">×</button>
-    </div>`).join('');
-}
-
-function slotsBlock(cfg, zone, dayKey) {
-  const zd = wcData(cfg)[zone];
-  const slots = zd[dayKey] || [];
-  const label = TIMETABLE_KEY_LABELS[dayKey] || dayKey;
-  return `
-    <div style="margin-bottom:12px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-        <span style="font-size:11px;font-weight:600;font-family:DM Mono,monospace;text-transform:uppercase;letter-spacing:.05em;color:var(--text2)">${label}</span>
-        <button class="btn btn-secondary btn-sm" style="padding:2px 8px;font-size:11px" onclick="addSlotField('${cfg}','${zone}','${dayKey}')">+ Slot</button>
+  return `<div class="zone-card">
+    <div class="zone-card-header" onclick="wcToggleZone('${zname}')">
+      <span class="zone-card-title">${zname}</span>
+      <div style="display:flex;gap:6px;align-items:center">
+        ${hasTT ? `<span class="badge badge-blue">${tt}</span>` : `<span class="badge badge-gray">away only</span>`}
+        <button class="btn btn-icon" onclick="event.stopPropagation();wcDelZone('${zname}')">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M2 4h10M5 4V2h4v2M6 7v4M8 7v4M3 4l1 8h6l1-8"/>
+          </svg>
+        </button>
       </div>
-      <div id="slots-${cfg}-${zone}-${dayKey}">${renderSlots(slots, cfg, zone, dayKey)}</div>
-    </div>`;
-}
-
-function renderZoneEditor(cfg, zone) {
-  const zd = wcData(cfg)[zone];
-  const tt = zd.timetable || 'Mon-Sun';
-  const ttOpts = TIMETABLES.map(t =>
-    `<option value="${t}" ${t===tt?'selected':''}>${TIMETABLE_LABELS[t]}</option>`
-  ).join('');
-  const phOpts = PREHEAT_OPTS.map(p =>
-    `<option value="${p}" ${(zd.preheat||'off')===p?'selected':''}>${p}</option>`
-  ).join('');
-
-  const keys = TIMETABLE_KEYS[tt] || ['Mon-Sun'];
-  const slotsHtml = keys.map(k => slotsBlock(cfg, zone, k)).join('');
-
-  return `
-    <div class="zone-section" id="zoneed-${cfg}-${zone}">
-      <div class="zone-section-title"><span>${zone}</span></div>
-
-      <div class="form-row" style="margin-bottom:10px">
-        <div class="form-group" style="margin:0">
-          <label class="form-label">Away temp (°C)</label>
-          <input class="form-input" type="number" step="0.5" min="5" max="21"
-            value="${zd.away_temp ?? 15}"
-            onchange="updateZoneMeta('${cfg}','${zone}','away_temp',parseFloat(this.value))">
+    </div>
+    <div class="zone-card-body" id="zone-body-${zname}">
+      <div class="form-row" style="margin-bottom:12px">
+        <div class="form-group">
+          <label class="form-label">Timetable</label>
+          <select class="form-select" onchange="wcSetTimetable('${zname}',this.value)">
+            <option value=""${!hasTT?' selected':''}>Away only (no timetable)</option>
+            ${["Mon-Sun","Mon-Fri, Sat, Sun","Mon, ..., Sun"].map(t =>
+              `<option${t===tt?' selected':''}>${t}</option>`
+            ).join("")}
+          </select>
         </div>
-        <div class="form-group" style="margin:0;display:flex;flex-direction:column;justify-content:flex-end">
-          <label class="form-label">Away enabled</label>
-          <label style="display:flex;align-items:center;gap:8px;padding:7px 0;cursor:pointer">
-            <input type="checkbox" ${zd.away_enabled?'checked':''} style="width:14px;height:14px;accent-color:var(--accent)"
-              onchange="updateZoneMeta('${cfg}','${zone}','away_enabled',this.checked)">
-            <span style="font-size:13px">${zd.away_enabled ? 'Yes' : 'No'}</span>
+        <div class="form-group">
+          <label class="form-label">Away temp (°C)</label>
+          <input class="form-input" type="number" step="0.5"
+            value="${zcfg.away_temp ?? 15}"
+            oninput="wcSetMeta('${zname}','away_temp',+this.value)">
+        </div>
+      </div>
+      <div class="form-row" style="margin-bottom:12px">
+        <div class="form-group">
+          <label class="form-label">Preheat</label>
+          <select class="form-select" onchange="wcSetMeta('${zname}','preheat',this.value)">
+            ${PREHEAT_OPTS.map(p => `<option${(zcfg.preheat||'ECO')===p?' selected':''}>${p}</option>`).join("")}
+          </select>
+        </div>
+        <div class="form-group" style="display:flex;flex-direction:column;justify-content:flex-end">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:4px">
+            <input type="checkbox" ${zcfg.away_enabled!==false?'checked':''}
+              onchange="wcSetMeta('${zname}','away_enabled',this.checked)">
+            <span class="form-label" style="margin:0">Away enabled</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" ${zcfg.early_start?'checked':''}
+              onchange="wcSetMeta('${zname}','early_start',this.checked)">
+            <span class="form-label" style="margin:0">Early start</span>
           </label>
         </div>
       </div>
-
-      <div class="form-row" style="margin-bottom:12px">
-        <div class="form-group" style="margin:0">
-          <label class="form-label">Preheat (away)</label>
-          <select class="form-select" onchange="updateZoneMeta('${cfg}','${zone}','preheat',this.value)">${phOpts}</select>
-        </div>
-        <div class="form-group" style="margin:0"></div>
-      </div>
-
-      <div style="margin-bottom:14px">
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-          <input type="checkbox" ${zd.early_start?'checked':''} style="width:14px;height:14px;accent-color:var(--accent)"
-            onchange="updateZoneMeta('${cfg}','${zone}','early_start',this.checked)">
-          <span style="font-size:13px">Early start</span>
-        </label>
-      </div>
-
-      <div class="form-group" style="margin-bottom:14px">
-        <label class="form-label">Timetable type</label>
-        <select class="form-select" onchange="changeZoneTimetable('${cfg}','${zone}',this.value)">${ttOpts}</select>
-      </div>
-
-      <div style="background:var(--surface2);border-radius:var(--radius);padding:10px 12px">
-        ${slotsHtml}
-      </div>
-    </div>`;
+      ${hasTT ? slotsHtml : ''}
+    </div>
+  </div>`;
 }
 
+function wcToggleZone(zname) {
+  const body = document.getElementById(`zone-body-${zname}`);
+  if (body) body.style.display = body.style.display === "none" ? "" : "none";
+}
 
-function renderWCEditor(name, data) {
-  const edEl = document.getElementById('weekconfig-editor');
+function wcShowTab(zname, key, btn) {
+  const card = btn.closest(".zone-card");
+  card.querySelectorAll(".tt-tab").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  const prefix = `zone-pane-${zname}-`;
+  card.querySelectorAll(`[id^="${prefix}"]`).forEach(p => p.style.display = "none");
+  document.getElementById(`zone-pane-${zname}-${key}`).style.display = "";
+}
 
-  // Filtrer les clés qui ne sont pas des zones (commençant par _)
-  const zoneKeys = Object.keys(data).filter(k => !k.startsWith('_'));
+function wcSetMeta(zname, field, value) {
+  state.wcData[zname][field] = value;
+}
 
-  if (!zoneKeys.length) {
-    edEl.innerHTML = `<div class="card"><div class="card-body"><div class="empty"><p>No zones in this file</p></div></div></div>`;
+function wcSetTimetable(zname, value) {
+  const zone = state.wcData[zname];
+  // Remove all old slot keys
+  for (const k of ["Mon-Sun","Mon-Fri","Sat","Sun","Mon","Tue","Wed","Thu","Fri"]) delete zone[k];
+  delete zone.timetable;
+  if (value) {
+    zone.timetable = value;
+    for (const k of (TT_KEYS[value] || [])) {
+      zone[k] = [{"start":"00:00","temp":16}];
+    }
+  }
+  renderWcDetail();
+}
+
+function wcSetSlot(zname, key, idx, field, value) {
+  state.wcData[zname][key][idx][field] = value;
+}
+
+function wcAddSlot(zname, key) {
+  state.wcData[zname][key].push({"start":"00:00","temp":16});
+  renderWcDetail();
+}
+
+function wcDelSlot(zname, key, idx) {
+  state.wcData[zname][key].splice(idx, 1);
+  renderWcDetail();
+}
+
+function wcDelZone(zname) {
+  confirm("Delete zone", `Remove zone '${zname}' from this config?`, () => {
+    delete state.wcData[zname];
+    renderWcDetail();
+  });
+}
+
+function wcAddZone() {
+  document.getElementById("wc-zone-name").value = "";
+  document.getElementById("wc-zone-err").textContent = "";
+  openModal("wc-add-zone");
+}
+
+function wcConfirmAddZone() {
+  const name = document.getElementById("wc-zone-name").value.trim();
+  if (!name) { document.getElementById("wc-zone-err").textContent = "Name required"; return; }
+  if (state.wcData[name]) { document.getElementById("wc-zone-err").textContent = "Zone already exists"; return; }
+  state.wcData[name] = { away_temp: 15, away_enabled: true };
+  closeModal("wc-add-zone");
+  renderWcDetail();
+}
+
+function wcCopyZone() {
+  const srcSel  = document.getElementById("wc-cz-config");
+  const others  = Object.keys(state.wc).filter(n => n !== state.wcCurrent);
+  srcSel.innerHTML = others.map(n => `<option>${n}</option>`).join("");
+  document.getElementById("wc-cz-dest").value = "";
+  document.getElementById("wc-cz-err").textContent = "";
+  wcCopyZoneConfigChanged();
+  openModal("wc-copy-zone");
+}
+
+function wcCopyZoneConfigChanged() {
+  const src  = document.getElementById("wc-cz-config").value;
+  const zones = state.wc[src] ? Object.keys(state.wc[src]) : [];
+  document.getElementById("wc-cz-zone").innerHTML = zones.map(z => `<option>${z}</option>`).join("");
+}
+
+function wcConfirmCopyZone() {
+  const src   = document.getElementById("wc-cz-config").value;
+  const zone  = document.getElementById("wc-cz-zone").value;
+  const dest  = document.getElementById("wc-cz-dest").value.trim() || zone;
+  if (state.wcData[dest]) {
+    confirm("Overwrite zone", `Zone '${dest}' already exists. Overwrite?`, () => {
+      state.wcData[dest] = JSON.parse(JSON.stringify(state.wc[src][zone]));
+      closeModal("wc-copy-zone");
+      renderWcDetail();
+    });
     return;
   }
+  state.wcData[dest] = JSON.parse(JSON.stringify(state.wc[src][zone]));
+  closeModal("wc-copy-zone");
+  renderWcDetail();
+}
 
-  // Initialiser les clés manquantes selon le timetable
-  zoneKeys.forEach(zone => {
-    const zd = data[zone];
-    const tt = zd.timetable || 'Mon-Sun';
-    const keys = TIMETABLE_KEYS[tt] || ['Mon-Sun'];
-    keys.forEach(k => { if (!zd[k]) zd[k] = []; });
-    // Nettoyer les clés qui n'appartiennent pas au timetable courant
-    ALL_DAY_KEYS.filter(k => !keys.includes(k)).forEach(k => { delete zd[k]; });
+async function wcSave() {
+  try {
+    const r = await api("POST", `/weekconfigs/${state.wcCurrent}?overwrite=true`, state.wcData);
+    state.wc[state.wcCurrent] = JSON.parse(JSON.stringify(state.wcData));
+    renderWcList();
+    toast("Saved", "ok");
+  } catch(e) { toast(e.message, "err"); }
+}
+
+async function wcDelete() {
+  confirm("Delete config", `Delete '${state.wcCurrent}'? This cannot be undone.`, async () => {
+    try {
+      await api("DELETE", `/weekconfigs/${state.wcCurrent}`);
+      delete state.wc[state.wcCurrent];
+      state.wcCurrent = null;
+      state.wcData = null;
+      renderWcList();
+      renderWcDetail();
+      toast("Deleted", "ok");
+    } catch(e) { toast(e.message, "err"); }
   });
-
-  const zonesHtml = zoneKeys.map(z => renderZoneEditor(name, z)).join('<div class="divider"></div>');
-
-  edEl.innerHTML = `
-    <div class="card">
-      <div class="card-header">
-        <h3 style="font-family:DM Mono,monospace">${name}.json</h3>
-        <div class="btn-group">
-          <button class="btn btn-danger btn-sm" onclick="deleteWeekconfig('${name}')">Delete</button>
-          <button class="btn btn-primary btn-sm" onclick="saveWeekconfig('${name}')">Save</button>
-        </div>
-      </div>
-      <div class="card-body">${zonesHtml}</div>
-    </div>`;
 }
 
-function updateSlotField(cfg, zone, dayKey, idx, field, val) {
-  wcData(cfg)[zone][dayKey][idx][field] = val;
+function wcRename() {
+  state.renameTarget = { type: "wc", name: state.wcCurrent };
+  document.getElementById("rename-title").textContent = `Rename '${state.wcCurrent}'`;
+  document.getElementById("rename-input").value = state.wcCurrent;
+  document.getElementById("rename-err").textContent = "";
+  openModal("rename");
 }
 
-function deleteSlotField(cfg, zone, dayKey, idx) {
-  wcData(cfg)[zone][dayKey].splice(idx, 1);
-  // Re-render juste les slots de ce bloc
-  const el = document.getElementById(`slots-${cfg}-${zone}-${dayKey}`);
-  if (el) el.innerHTML = renderSlots(wcData(cfg)[zone][dayKey], cfg, zone, dayKey);
+async function wcCreateNew() {
+  const name = document.getElementById("wc-new-name").value.trim();
+  if (!name) { document.getElementById("wc-new-err").textContent = "Name required"; return; }
+  if (state.wc[name]) { document.getElementById("wc-new-err").textContent = "Already exists"; return; }
+  try {
+    await api("POST", `/weekconfigs/${name}`, {});
+    state.wc[name] = {};
+    closeModal("wc-new");
+    renderWcList();
+    selectWc(name);
+    toast("Created", "ok");
+  } catch(e) { document.getElementById("wc-new-err").textContent = e.message; }
 }
 
-function addSlotField(cfg, zone, dayKey) {
-  if (!wcData(cfg)[zone][dayKey]) wcData(cfg)[zone][dayKey] = [];
-  const existing = wcData(cfg)[zone][dayKey];
-  const lastTime = existing.length ? existing[existing.length-1].start : '07:00';
-  wcData(cfg)[zone][dayKey].push({ start: lastTime, temp: 19 });
-  const el = document.getElementById(`slots-${cfg}-${zone}-${dayKey}`);
-  if (el) el.innerHTML = renderSlots(wcData(cfg)[zone][dayKey], cfg, zone, dayKey);
+async function wcCopyConfig() {
+  const src  = document.getElementById("wc-copy-src").value;
+  const name = document.getElementById("wc-copy-name").value.trim();
+  if (!name) { document.getElementById("wc-copy-err").textContent = "Name required"; return; }
+  try {
+    const r = await api("POST", `/weekconfigs/${src}/copy`, { newname: name });
+    closeModal("wc-copy-from");
+    await loadWeekconfigs();
+    selectWc(name);
+    toast("Copied", "ok");
+  } catch(e) { document.getElementById("wc-copy-err").textContent = e.message; }
 }
 
-function updateZoneMeta(cfg, zone, field, val) {
-  wcData(cfg)[zone][field] = val;
-}
-
-function changeZoneTimetable(cfg, zone, newTT) {
-  const zd    = wcData(cfg)[zone];
-  const oldTT = zd.timetable || 'Mon-Sun';
-  if (oldTT === newTT) return;
-
-  const cp = k => JSON.parse(JSON.stringify(zd[k] || []));
-
-  // Migration selon tableau de règles
-  if (oldTT === 'Mon-Sun') {
-    if (newTT === 'Mon-Fri, Sat, Sun') {
-      zd['Mon-Fri'] = cp('Mon-Sun');
-      zd['Sat']     = cp('Mon-Sun');
-      zd['Sun']     = cp('Mon-Sun');
-    } else if (newTT === 'Mon, ..., Sun') {
-      ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].forEach(k => { zd[k] = cp('Mon-Sun'); });
+// ─────────────────────────────────────────────────────────────────────────
+// PLANNINGS — LIST
+// ─────────────────────────────────────────────────────────────────────────
+async function loadPlannings() {
+  try {
+    const { data } = await api("GET", "/plannings");
+    state.pl = data.plannings || [];
+    renderPlList();
+    if (state.plCurrent) {
+      const found = state.pl.find(p => p.name === state.plCurrent);
+      if (found) selectPl(state.plCurrent);
     }
-  } else if (oldTT === 'Mon-Fri, Sat, Sun') {
-    if (newTT === 'Mon-Sun') {
-      zd['Mon-Sun'] = cp('Mon-Fri');
-    } else if (newTT === 'Mon, ..., Sun') {
-      ['Mon','Tue','Wed','Thu','Fri'].forEach(k => { zd[k] = cp('Mon-Fri'); });
-      zd['Sat'] = cp('Sat');
-      zd['Sun'] = cp('Sun');
-    }
-  } else if (oldTT === 'Mon, ..., Sun') {
-    if (newTT === 'Mon-Sun') {
-      zd['Mon-Sun'] = cp('Mon');
-    } else if (newTT === 'Mon-Fri, Sat, Sun') {
-      zd['Mon-Fri'] = cp('Mon');
-      // Sat et Sun restent tels quels
-    }
+  } catch(e) { toast(e.message, "err"); }
+}
+
+function renderPlList() {
+  const el = document.getElementById("plList");
+  if (!state.pl.length) {
+    el.innerHTML = `<div class="empty"><div class="empty-text">No plannings yet</div></div>`;
+    return;
   }
-
-  // Nettoyer les clés de l'ancien timetable
-  const oldKeys = TIMETABLE_KEYS[oldTT] || [];
-  const newKeys = TIMETABLE_KEYS[newTT] || [];
-  oldKeys.filter(k => !newKeys.includes(k)).forEach(k => delete zd[k]);
-
-  zd.timetable = newTT;
-  const el = document.getElementById(`zoneed-${cfg}-${zone}`);
-  if (el) el.outerHTML = renderZoneEditor(cfg, zone);
-}
-
-async function saveWeekconfig(name) {
-  try {
-    const r = await fetch(window.API_BASE + `/api/configs/${name}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(currentWeekconfigs[name])
-    });
-    const d = await r.json();
-    if (d.ok) toast(`${name}.json saved`, 'success');
-    else toast('Save error', 'error');
-  } catch(e) { toast('Network error', 'error'); }
-}
-
-async function deleteWeekconfig(name) {
-  if (!confirm(`Delete ${name}.json?`)) return;
-  await fetch(window.API_BASE + `/api/configs/${name}`, { method: 'DELETE' });
-  currentWeekconfig = null;
-  document.getElementById('weekconfig-editor').innerHTML = `<div class="empty"><p>File deleted</p></div>`;
-  loadWeekconfigs();
-  toast(`${name}.json deleted`);
-}
-
-function newWeekconfig() { openModal('modal-new-wc'); document.getElementById('new-wc-name').value = ''; }
-async function createWeekconfig() {
-  const name = document.getElementById('new-wc-name').value.trim().replace(/[^a-z0-9_-]/gi, '_');
-  if (!name) return;
-  if (!allZones.length) {
-    try { const r = await fetch(window.API_BASE + '/api/zones'); const d = await r.json(); allZones = d.zones || []; } catch(e) {}
-  }
-  const empty = {};
-  allZones.forEach(z => {
-    empty[z.name] = { timetable: 'Mon-Sun', 'Mon-Sun': [], away_temp: 15.0, away_enabled: false, preheat: 'off', early_start: false };
-  });
-  await fetch(window.API_BASE + `/api/configs/${name}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(empty) });
-  closeModal('modal-new-wc');
-  await loadWeekconfigs();
-  selectWeekconfig(name);
-  toast(`${name}.json created`, 'success');
-}
-
-// ─────────────────────────────────────────────
-// PLANNING (standard + exceptions unified)
-// ─────────────────────────────────────────────
-
-async function loadPlanningList() {
-  const el = document.getElementById('planning-list');
-  el.innerHTML = '<div class="loading-placeholder"><span class="spinner"></span></div>';
-  try {
-    const [sr, er] = await Promise.all([
-      fetch(window.API_BASE + '/api/planning/standard'),
-      fetch(window.API_BASE + '/api/planning/exceptions')
-    ]);
-    const stdData = await sr.json();
-    const excData = await er.json();
-
-    let html = '';
-
-    // Standard planning — always first, no delete
-    html += `<div class="item-row" id="plan-row-standard" onclick="selectPlanning('standard')">
-      <div style="min-width:0">
-        <div class="item-name" style="font-size:12.5px">Standard</div>
-        <div style="font-family:DM Mono,monospace;font-size:10px;color:var(--text3);margin-top:1px">planning_standard.json</div>
+  el.innerHTML = state.pl.map(p => {
+    const isStd   = !p.start && !p.end;
+    const badge   = isStd
+      ? `<span class="badge badge-green">standard</span>`
+      : `<span class="badge badge-orange">exception</span>`;
+    const sub = isStd ? p.cycle : `${p.start||'…'} → ${p.end||'…'}`;
+    return `<div class="item-row ${p.name === state.plCurrent ? 'active' : ''}" onclick="selectPl('${p.name}')">
+      <div>
+        <div class="item-name">${p.name} ${badge}</div>
+        <div class="item-meta">${sub}</div>
       </div>
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text3);flex-shrink:0"><polyline points="9 18 15 12 9 6"/></svg>
     </div>`;
-
-    // Divider between standard and exceptions
-    if (excData.exceptions?.length) {
-      html += `<div style="height:1px;background:var(--border);margin:4px 0"></div>`;
-      html += excData.exceptions.map(e => {
-        const ps = e.period?.start ?? '?';
-        const pe = e.period?.end   ?? '?';
-        return `<div class="item-row" id="plan-row-${e.name}" onclick="selectPlanning('${e.name}')">
-          <div style="min-width:0">
-            <div class="item-name" style="font-size:12.5px">${e.description}</div>
-            <div style="font-family:DM Mono,monospace;font-size:10px;color:var(--text3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${ps} → ${pe}</div>
-          </div>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text3);flex-shrink:0"><polyline points="9 18 15 12 9 6"/></svg>
-        </div>`;
-      }).join('');
-    }
-
-    el.innerHTML = html;
-  } catch(e) { el.innerHTML = `<div class="empty"><p>Error</p></div>`; }
+  }).join("");
 }
 
-async function selectPlanning(name) {
-  document.querySelectorAll('[id^="plan-row-"]').forEach(r => r.classList.remove('selected'));
-  const row = document.getElementById('plan-row-' + name);
-  if (row) row.classList.add('selected');
-  currentPlanningName = name;
-
-  const edEl = document.getElementById('planning-editor');
-  edEl.innerHTML = '<div class="loading-placeholder"><span class="spinner"></span> Loading…</div>';
-
-  try {
-    const url = name === 'standard'
-      ? window.API_BASE + '/api/planning/standard'
-      : window.API_BASE + `/api/planning/exceptions/${name}`;
-    const [dr, cr] = await Promise.all([fetch(url), fetch(window.API_BASE + '/api/configs')]);
-    currentPlanningData   = await dr.json();
-    currentPlanningEvents = currentPlanningData.events || [];
-    const configs = (await cr.json()).configs || [];
-    renderPlanningEditor(configs);
-  } catch(e) { edEl.innerHTML = `<div class="empty"><p>Load error</p></div>`; }
+function selectPl(name) {
+  state.plCurrent = name;
+  state.plData = JSON.parse(JSON.stringify(state.pl.find(p => p.name === name)));
+  renderPlList();
+  renderPlDetail();
 }
 
-function renderPlanningEditor(configs) {
-  const edEl   = document.getElementById('planning-editor');
-  const name   = currentPlanningName;
-  const isStd  = name === 'standard';
-  const data   = currentPlanningData;
+// ─────────────────────────────────────────────────────────────────────────
+// PLANNINGS — DETAIL
+// ─────────────────────────────────────────────────────────────────────────
+function renderPlDetail() {
+  const header = document.getElementById("plDetailHeader");
+  const body   = document.getElementById("plDetail");
+  if (!state.plCurrent) {
+    header.style.display = "none";
+    body.innerHTML = `<div class="empty"><div class="empty-icon">📅</div><div class="empty-text">Select a planning</div></div>`;
+    return;
+  }
+  header.style.display = "flex";
+  document.getElementById("plDetailName").textContent = state.plCurrent;
+  const p = state.plData;
+  const cycle = p.cycle || "two-weeks-iso";
+  const isTwoWeeks = cycle !== "one-week";
 
-  const WEEK_ORDER = { 'both':0,'odd':1,'even':2 };
-  const DAY_ORDER  = { 'monday':0,'tuesday':1,'wednesday':2,'thursday':3,'friday':4,'saturday':5,'sunday':6,
-                       'mon':0,'tue':1,'wed':2,'thu':3,'fri':4,'sat':5,'sun':6 };
-  const DAY_NORM   = { 'monday':'Mon','tuesday':'Tue','wednesday':'Wed','thursday':'Thu',
-                       'friday':'Fri','saturday':'Sat','sunday':'Sun',
-                       'mon':'Mon','tue':'Tue','wed':'Wed','thu':'Thu','fri':'Fri','sat':'Sat','sun':'Sun' };
+  const eventsRows = (p.events || []).map((ev, i) => renderEventRow(ev, i, isTwoWeeks)).join("");
 
-  const realEvents = currentPlanningEvents
-    .filter(e => e.day && e.time && e.config)
-    .slice()
-    .sort((a, b) => {
-      const wA = WEEK_ORDER[a.week]??0, wB = WEEK_ORDER[b.week]??0;
-      if (wA !== wB) return wA - wB;
-      const dA = DAY_ORDER[a.day?.toLowerCase()]??0, dB = DAY_ORDER[b.day?.toLowerCase()]??0;
-      if (dA !== dB) return dA - dB;
-      return (a.time||'').localeCompare(b.time||'');
-    });
-
-  const eventsHtml = realEvents.length === 0
-    ? `<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:20px">No events</td></tr>`
-    : realEvents.map((e, i) => `
+  body.innerHTML = `
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Start <span style="font-weight:400;text-transform:none">(optional)</span></label>
+        <input class="form-input" id="pl-start" type="text" placeholder="YYYY-MM-DD HH:MM"
+          value="${p.start||''}" oninput="plSetField('start',this.value||null);plValidate()">
+      </div>
+      <div class="form-group">
+        <label class="form-label">End <span style="font-weight:400;text-transform:none">(optional)</span></label>
+        <input class="form-input" id="pl-end" type="text" placeholder="YYYY-MM-DD HH:MM"
+          value="${p.end||''}" oninput="plSetField('end',this.value||null);plValidate()">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Cycle</label>
+        <select class="form-select" id="pl-cycle" onchange="plSetCycle(this.value)">
+          ${CYCLES.map(c => `<option${c===cycle?' selected':''}>${c}</option>`).join("")}
+        </select>
+      </div>
+      <div class="form-group" id="pl-refdate-group" ${cycle!=='two-weeks-seq'?'style="display:none"':''}>
+        <label class="form-label">Reference date</label>
+        <input class="form-input" id="pl-refdate" type="text" placeholder="YYYY-MM-DD"
+          value="${p.ref_date||''}" oninput="plSetField('ref_date',this.value||null)">
+      </div>
+    </div>
+    <div class="divider"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <span style="font-weight:600;font-size:13px">Events</span>
+      <button class="btn btn-secondary btn-sm" onclick="plAddEvent()">+ Event</button>
+    </div>
+    <table class="events-table" id="pl-events-table">
       <tr>
-        <td><code>${DAY_NORM[e.day?.toLowerCase()] ?? e.day}</code></td>
-        <td><code>${e.time}</code></td>
-        <td><span class="badge ${e.week==='odd'?'badge-blue':e.week==='even'?'badge-green':'badge-gray'}">${e.week ?? 'both'}</span></td>
-        <td><code>${e.config}</code></td>
-        <td><span class="badge badge-gray">L${e.level ?? 1}</span></td>
-        <td style="text-align:right">
-          <button class="btn btn-danger btn-sm" onclick="deletePlanEvent(${i})">Delete</button>
-        </td>
-      </tr>`).join('');
-
-  const configOptions = configs.map(c => `<option value="${c}">${c}</option>`).join('');
-
-  // Meta card: only shown for exceptions (standard has no period/description to edit)
-  const metaCard = isStd ? '' : `
-    <div class="card" style="margin-bottom:16px">
-      <div class="card-header"><h3>Details</h3></div>
-      <div class="card-body">
-        <div class="form-group" style="margin-bottom:10px">
-          <label class="form-label">Description</label>
-          <input class="form-input" value="${data._description ?? ''}"
-            onchange="currentPlanningData._description = this.value">
-        </div>
-        <div class="form-row">
-          <div class="form-group" style="margin:0">
-            <label class="form-label">Start</label>
-            <input class="form-input" type="datetime-local"
-              value="${(data.period?.start ?? '').replace(' ','T')}"
-              onchange="currentPlanningData.period.start = this.value.replace('T',' ')">
-          </div>
-          <div class="form-group" style="margin:0">
-            <label class="form-label">End</label>
-            <input class="form-input" type="datetime-local"
-              value="${(data.period?.end ?? '').replace(' ','T')}"
-              onchange="currentPlanningData.period.end = this.value.replace('T',' ')">
-          </div>
-        </div>
-      </div>
-    </div>`;
-
-  const headerTitle = isStd
-    ? `<h3 style="font-family:DM Mono,monospace">planning_standard.json</h3>`
-    : `<h3 style="font-family:DM Mono,monospace">${name}.json</h3>`;
-
-  const deleteBtn = isStd ? '' :
-    `<button class="btn btn-danger btn-sm" onclick="deletePlanFile('${name}')">Delete</button>`;
-
-  edEl.innerHTML = `
-    <div class="card" style="margin-bottom:16px">
-      <div class="card-header">
-        ${headerTitle}
-        <div class="btn-group">
-          ${deleteBtn}
-          <button class="btn btn-primary btn-sm" onclick="savePlan()">Save</button>
-        </div>
-      </div>
-    </div>
-
-    ${metaCard}
-
-    <div class="card" style="margin-bottom:16px">
-      <div class="card-header"><h3>Add an event</h3></div>
-      <div class="card-body">
-        <div class="form-row" style="margin-bottom:10px">
-          <div class="form-group" style="margin:0">
-            <label class="form-label">Day</label>
-            <select class="form-select" id="plan-ev-day">
-              <option value="monday">Mon</option><option value="tuesday">Tue</option>
-              <option value="wednesday">Wed</option><option value="thursday">Thu</option>
-              <option value="friday">Fri</option><option value="saturday">Sat</option>
-              <option value="sunday">Sun</option>
-            </select>
-          </div>
-          <div class="form-group" style="margin:0">
-            <label class="form-label">Time</label>
-            <input class="form-input" type="time" id="plan-ev-time" value="00:00" />
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group" style="margin:0">
-            <label class="form-label">Week</label>
-            <select class="form-select" id="plan-ev-week">
-              <option value="both">Both</option>
-              <option value="odd">Odd</option>
-              <option value="even">Even</option>
-            </select>
-          </div>
-          <div class="form-group" style="margin:0">
-            <label class="form-label">Config</label>
-            <select class="form-select" id="plan-ev-config">${configOptions}</select>
-          </div>
-        </div>
-        <div class="form-row" style="margin-top:10px">
-          <div class="form-group" style="margin:0">
-            <label class="form-label">Level</label>
-            <select class="form-select" id="plan-ev-level">
-              <option value="1">Level 1</option>
-              <option value="2">Level 2</option>
-            </select>
-          </div>
-          <div style="display:flex;align-items:flex-end">
-            <button class="btn btn-primary" onclick="addPlanEvent()" style="width:100%">Add</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-header">
-        <h3>Events</h3>
-        <button class="btn btn-primary btn-sm" onclick="savePlan()">Save</button>
-      </div>
-      <div class="card-body" style="padding:0">
-        <table class="schedule-table">
-          <thead><tr><th>Day</th><th>Time</th><th>Week</th><th>Config</th><th>Level</th><th></th></tr></thead>
-          <tbody>${eventsHtml}</tbody>
-        </table>
-      </div>
-    </div>`;
+        <th>Level</th><th>Day</th><th>Time</th>
+        ${isTwoWeeks ? '<th>Week</th>' : ''}
+        <th>Config</th><th></th>
+      </tr>
+      ${eventsRows}
+    </table>`;
 }
 
-function addPlanEvent() {
-  currentPlanningEvents.push({
-    day:    document.getElementById('plan-ev-day').value,
-    time:   document.getElementById('plan-ev-time').value,
-    week:   document.getElementById('plan-ev-week').value,
-    config: document.getElementById('plan-ev-config').value,
-    level:  parseInt(document.getElementById('plan-ev-level').value)
+function renderEventRow(ev, i, isTwoWeeks) {
+  const configs = Object.keys(state.wc);
+  return `<tr id="ev-row-${i}">
+    <td>
+      <select onchange="plSetEv(${i},'level',+this.value)">
+        <option${ev.level===1?' selected':''} value="1">L1</option>
+        <option${ev.level===2?' selected':''} value="2">L2</option>
+      </select>
+    </td>
+    <td>
+      <select onchange="plSetEv(${i},'day',this.value)">
+        ${DAYS.map((d,di) => `<option${d===ev.day?' selected':''}>${d}</option>`).join("")}
+      </select>
+    </td>
+    <td><input style="width:72px;font-family:var(--mono)" value="${ev.time||'00:00'}"
+      oninput="plSetEv(${i},'time',this.value)"></td>
+    ${isTwoWeeks ? `<td>
+      <select onchange="plSetEv(${i},'week',this.value)">
+        ${["odd","even","both"].map(w => `<option${(ev.week||'both')===w?' selected':''}>${w}</option>`).join("")}
+      </select>
+    </td>` : ''}
+    <td>
+      <select onchange="plSetEv(${i},'config',this.value)">
+        ${configs.map(c => `<option${c===ev.config?' selected':''}>${c}</option>`).join("")}
+      </select>
+    </td>
+    <td><button class="slot-del" onclick="plDelEvent(${i})">✕</button></td>
+  </tr>`;
+}
+
+function plSetField(field, value) {
+  state.plData[field] = value;
+}
+
+function plSetCycle(value) {
+  state.plData.cycle = value;
+  const isTW = value !== "one-week";
+  document.getElementById("pl-refdate-group").style.display = isTW && value === "two-weeks-seq" ? "" : "none";
+  // Re-render events table to show/hide week column
+  renderPlDetail();
+}
+
+function plSetEv(i, field, value) {
+  state.plData.events[i][field] = value;
+}
+
+function plAddEvent() {
+  const configs = Object.keys(state.wc);
+  state.plData.events = state.plData.events || [];
+  state.plData.events.push({
+    level: 1, day: "monday", time: "00:00",
+    week: "both",
+    config: configs[0] || ""
   });
-  fetch(window.API_BASE + '/api/configs').then(r => r.json()).then(d => renderPlanningEditor(d.configs || []));
+  renderPlDetail();
 }
 
-function deletePlanEvent(i) {
-  let count = -1;
-  const idx = currentPlanningEvents.findIndex(e => {
-    if (e.day && e.time && e.config) count++;
-    return count === i;
+function plDelEvent(i) {
+  state.plData.events.splice(i, 1);
+  renderPlDetail();
+}
+
+async function plValidate() {
+  if (!state.plData) return;
+  const payload = { ...state.plData, _exclude_name: state.plCurrent };
+  try {
+    const { data } = await api("POST", "/plannings/validate", payload);
+    const bar = document.getElementById("plValidationBar");
+    if (data.valid) {
+      bar.innerHTML = "";
+    } else {
+      bar.innerHTML = `<div class="alert alert-error" style="margin:8px 20px 0;font-size:12px">
+        ${data.errors.map(e => `• ${e}`).join("<br>")}
+      </div>`;
+    }
+  } catch(e) {}
+}
+
+async function plSave() {
+  try {
+    const r = await api("POST", `/plannings/${state.plCurrent}?overwrite=true`, state.plData);
+    if (!r.ok && !r.data.exists) throw new Error(r.data.error);
+    if (r.status === 422) { toast(r.data.error, "err"); return; }
+    const idx = state.pl.findIndex(p => p.name === state.plCurrent);
+    if (idx >= 0) state.pl[idx] = JSON.parse(JSON.stringify(state.plData));
+    renderPlList();
+    toast("Saved", "ok");
+  } catch(e) { toast(e.message, "err"); }
+}
+
+async function plDelete() {
+  confirm("Delete planning", `Delete '${state.plCurrent}'?`, async () => {
+    try {
+      await api("DELETE", `/plannings/${state.plCurrent}`);
+      state.pl = state.pl.filter(p => p.name !== state.plCurrent);
+      state.plCurrent = null;
+      state.plData = null;
+      renderPlList();
+      renderPlDetail();
+      toast("Deleted", "ok");
+    } catch(e) { toast(e.message, "err"); }
   });
-  if (idx !== -1) currentPlanningEvents.splice(idx, 1);
-  fetch(window.API_BASE + '/api/configs').then(r => r.json()).then(d => renderPlanningEditor(d.configs || []));
 }
 
-async function savePlan() {
-  const name  = currentPlanningName;
-  const isStd = name === 'standard';
-  currentPlanningData.events = currentPlanningEvents;
-  const url = isStd
-    ? window.API_BASE + '/api/planning/standard'
-    : window.API_BASE + `/api/planning/exceptions/${name}`;
-  const r = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(currentPlanningData)
+function plRename() {
+  state.renameTarget = { type: "pl", name: state.plCurrent };
+  document.getElementById("rename-title").textContent = `Rename '${state.plCurrent}'`;
+  document.getElementById("rename-input").value = state.plCurrent;
+  document.getElementById("rename-err").textContent = "";
+  openModal("rename");
+}
+
+async function plCreateNew() {
+  const name = document.getElementById("pl-new-name").value.trim();
+  if (!name) { document.getElementById("pl-new-err").textContent = "Name required"; return; }
+  if (state.pl.find(p => p.name === name)) {
+    document.getElementById("pl-new-err").textContent = "Already exists"; return;
+  }
+  const newPl = { name, start: null, end: null, cycle: "two-weeks-iso", events: [] };
+  try {
+    await api("POST", `/plannings/${name}`, newPl);
+    state.pl.push(newPl);
+    closeModal("pl-new");
+    state.plCurrent = name;
+    state.plData = JSON.parse(JSON.stringify(newPl));
+    renderPlList();
+    renderPlDetail();
+    toast("Created", "ok");
+  } catch(e) { document.getElementById("pl-new-err").textContent = e.message; }
+}
+
+async function plCopyPlanning() {
+  const src  = document.getElementById("pl-copy-src").value;
+  const name = document.getElementById("pl-copy-name").value.trim();
+  if (!name) { document.getElementById("pl-copy-err").textContent = "Name required"; return; }
+  try {
+    await api("POST", `/plannings/${src}/copy`, { newname: name });
+    closeModal("pl-copy-from");
+    await loadPlannings();
+    selectPl(name);
+    toast("Copied", "ok");
+  } catch(e) { document.getElementById("pl-copy-err").textContent = e.message; }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// SHARED RENAME
+// ─────────────────────────────────────────────────────────────────────────
+async function confirmRename() {
+  const newname = document.getElementById("rename-input").value.trim();
+  if (!newname) { document.getElementById("rename-err").textContent = "Name required"; return; }
+  const { type, name } = state.renameTarget;
+  try {
+    if (type === "wc") {
+      await api("POST", `/weekconfigs/${name}/rename`, { newname });
+      const val = state.wc[name];
+      delete state.wc[name];
+      state.wc[newname] = val;
+      if (state.wcCurrent === name) state.wcCurrent = newname;
+      renderWcList();
+      renderWcDetail();
+    } else {
+      await api("POST", `/plannings/${name}/rename`, { newname });
+      const p = state.pl.find(p => p.name === name);
+      if (p) p.name = newname;
+      if (state.plCurrent === name) {
+        state.plCurrent = newname;
+        if (state.plData) state.plData.name = newname;
+      }
+      renderPlList();
+      renderPlDetail();
+    }
+    closeModal("rename");
+    toast("Renamed", "ok");
+  } catch(e) { document.getElementById("rename-err").textContent = e.message; }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// MODAL OPEN HELPERS (populate dropdowns)
+// ─────────────────────────────────────────────────────────────────────────
+const _origOpenModal = openModal;
+function openModal(id) {
+  if (id === "wc-copy-from") {
+    document.getElementById("wc-copy-src").innerHTML =
+      Object.keys(state.wc).map(n => `<option>${n}</option>`).join("");
+    document.getElementById("wc-copy-name").value = "";
+    document.getElementById("wc-copy-err").textContent = "";
+  }
+  if (id === "pl-copy-from") {
+    document.getElementById("pl-copy-src").innerHTML =
+      state.pl.map(p => `<option>${p.name}</option>`).join("");
+    document.getElementById("pl-copy-name").value = "";
+    document.getElementById("pl-copy-err").textContent = "";
+  }
+  if (id === "wc-new") {
+    document.getElementById("wc-new-name").value = "";
+    document.getElementById("wc-new-err").textContent = "";
+  }
+  if (id === "pl-new") {
+    document.getElementById("pl-new-name").value = "";
+    document.getElementById("pl-new-err").textContent = "";
+  }
+  document.getElementById("modal-" + id).classList.add("open");
+}
+
+// Close modal on overlay click
+document.querySelectorAll(".modal-overlay").forEach(el => {
+  el.addEventListener("click", e => {
+    if (e.target === el) el.classList.remove("open");
   });
-  const d = await r.json();
-  if (d.ok) toast(`${isStd ? 'planning_standard' : name}.json saved`, 'success');
-  else toast('Save error', 'error');
-}
-
-async function deletePlanFile(name) {
-  if (!confirm(`Delete ${name}?`)) return;
-  await fetch(window.API_BASE + `/api/planning/exceptions/${name}`, { method: 'DELETE' });
-  currentPlanningName   = null;
-  currentPlanningData   = null;
-  currentPlanningEvents = [];
-  document.getElementById('planning-editor').innerHTML = `<div class="empty"><p>File deleted</p></div>`;
-  loadPlanningList();
-  toast('Exception deleted');
-}
-
-function newException() { openModal('modal-new-exc'); }
-async function createException() {
-  const name  = document.getElementById('new-exc-name').value.trim().replace(/[^a-z0-9_-]/gi, '_');
-  const desc  = document.getElementById('new-exc-desc').value.trim();
-  const start = document.getElementById('new-exc-start').value.replace('T', ' ');
-  const end   = document.getElementById('new-exc-end').value.replace('T', ' ');
-  if (!name || !start || !end) { toast('Required fields missing', 'error'); return; }
-  const obj = { _description: desc || name, period: { start, end }, events: [] };
-  await fetch(window.API_BASE + `/api/planning/exceptions/planning_${name}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(obj)
-  });
-  closeModal('modal-new-exc');
-  await loadPlanningList();
-  selectPlanning(`planning_${name}`);
-  toast(`planning_${name}.json created`, 'success');
-}
-
-// ─────────────────────────────────────────────
-// INIT
-// ─────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
-  loadStatus();
-  // Pre-load zones in background
-  fetch(window.API_BASE + '/api/zones').then(r => r.json()).then(d => { allZones = d.zones || []; }).catch(() => {});
 });
+
+// ─────────────────────────────────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────────────────────────────────
+loadStatus();
 </script>
 </body>
 </html>
