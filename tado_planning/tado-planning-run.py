@@ -839,7 +839,7 @@ def apply_level(tado: Tado, level: int, config_name: str,
     zone_targets = list(zone_cfg_map.keys())
 
     log(f"\n[APPLY level {level}] '{config_name}' "
-        f"(planning: {planning_name}) — {len(zone_targets)} zone(s)...")
+        f"{source_label} — {len(zone_targets)} zone(s)...")
 
     zones = find_zones(tado, zone_targets)
     if not zones:
