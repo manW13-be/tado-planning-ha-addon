@@ -146,7 +146,6 @@ case "$CONTEXT" in
         SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
         PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
         SCHEDULES_DIR="$PROJECT_DIR/schedules"
-        SCHEDULES_TMPL="$SCRIPT_DIR/schedules.tmpl"
         TOKEN_FILE="$PROJECT_DIR/tado_refresh_token"
         PYTHON=$(which python3.11 2>/dev/null || which python3)
         PLANNING_SCRIPT="$SCRIPT_DIR/tado-planning-run.py"
@@ -161,7 +160,6 @@ case "$CONTEXT" in
         SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
         PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
         SCHEDULES_DIR="/config/tado-planning/schedules"
-        SCHEDULES_TMPL="$SCRIPT_DIR/schedules.tmpl"
         TOKEN_FILE="/config/tado-planning/tado_refresh_token"
         CFG_PORT="${CFG_PORT:-8099}"
         CFG_HOST="0.0.0.0"
@@ -192,7 +190,6 @@ case "$CONTEXT" in
     ha-docker-prod|ha-docker-test)
         VERBOSITY=$(jq -r '.verbosity // 0' /data/options.json 2>/dev/null || echo "0")
         SCHEDULES_DIR="/config/tado-planning/schedules"
-        SCHEDULES_TMPL="/schedules.tmpl"
         TOKEN_FILE="/config/tado-planning/tado_refresh_token"
         PYTHON="python3"
         PLANNING_SCRIPT="/tado-planning-run.py"
@@ -207,19 +204,10 @@ esac
 # Schedule initialisation
 # ---------------------------------------------------------------------------
 init_schedules() {
-    if [ ! -d "$SCHEDULES_DIR" ] || [ -z "$(ls -A "$SCHEDULES_DIR" 2>/dev/null)" ]; then
-        if [ -d "$SCHEDULES_TMPL" ]; then
-            log "Initializing schedules from schedules.tmpl/..."
-            mkdir -p "$SCHEDULES_DIR"
-            cp "$SCHEDULES_TMPL"/* "$SCHEDULES_DIR/"
-            log "⚠  Review schedule files before next run"
-        else
-            log "ERROR: schedules/ not found and no schedules.tmpl/ available"
-            exit 1
-        fi
-    else
-        log "Schedules: $(ls "$SCHEDULES_DIR"/*.json 2>/dev/null | wc -l | tr -d ' ') file(s)"
-    fi
+    mkdir -p "$SCHEDULES_DIR"
+    local count
+    count=$(ls "$SCHEDULES_DIR"/*.json 2>/dev/null | wc -l | tr -d ' ')
+    log "Schedules: ${count} file(s)"
 }
 
 # ---------------------------------------------------------------------------
