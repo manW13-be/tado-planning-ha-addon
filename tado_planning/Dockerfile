@@ -12,7 +12,6 @@ COPY run.sh               /run.sh
 COPY static/              /static/
 COPY templates/           /templates/
 COPY config.json          /config.json.addon
-COPY schedules.tmpl/      /schedules.tmpl/
 
 RUN chmod +x /run.sh
 
