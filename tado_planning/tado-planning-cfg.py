@@ -48,7 +48,9 @@ WEEKCONFIGS_FILE = os.path.join(DATA_DIR, "weekconfigs.json")
 # FLASK APP
 # ---------------------------------------------------------------------------
 
-app = Flask(__name__, template_folder="templates", static_folder="static")
+app = Flask(__name__,
+            template_folder=os.path.join(_SCRIPT_DIR, "templates"),
+            static_folder=os.path.join(_SCRIPT_DIR, "static"))
 app.config["JSON_SORT_KEYS"] = False
 
 # ---------------------------------------------------------------------------
@@ -207,149 +209,372 @@ def validate_planning(p: dict, weekconfigs: dict, all_plannings: list,
 # STATUS COMPUTATION
 # ---------------------------------------------------------------------------
 
-def get_active_status() -> dict:
+# ---------------------------------------------------------------------------
+# SHARED PLANNING HELPERS
+# ---------------------------------------------------------------------------
+
+def _parse_dt(s):
+    return datetime.datetime.strptime(s, "%Y-%m-%d %H:%M") if s else None
+
+
+def _week_parity(t: datetime.datetime, planning: dict) -> str:
+    cycle    = planning.get("cycle", "two-weeks-iso")
+    ref_date = planning.get("ref_date")
+    if cycle == "two-weeks-iso":
+        return "odd" if t.isocalendar()[1] % 2 == 1 else "even"
+    elif cycle == "two-weeks-seq" and ref_date:
+        ref     = datetime.datetime.strptime(ref_date, "%Y-%m-%d")
+        ref_mon = ref - datetime.timedelta(days=ref.weekday())
+        t_mon   = t   - datetime.timedelta(days=t.weekday())
+        weeks   = int((t_mon - ref_mon).days / 7)
+        return "odd" if weeks % 2 == 0 else "even"
+    return "odd"
+
+
+_DAY_MAP = {"monday":0,"tuesday":1,"wednesday":2,
+            "thursday":3,"friday":4,"saturday":5,"sunday":6}
+_DAY_ABR = {0:"Mon",1:"Tue",2:"Wed",3:"Thu",4:"Fri",5:"Sat",6:"Sun"}
+
+
+def _active_plannings_at(plannings: list, t: datetime.datetime) -> list:
+    """Return all plannings active at time t, sorted by precedence (highest first)."""
+    group1, group2, group3 = [], [], []
+    for p in plannings:
+        s = _parse_dt(p.get("start"))
+        e = _parse_dt(p.get("end"))
+        if s is not None:
+            if s <= t and (e is None or e >= t):
+                group1.append(p)
+        elif e is not None:
+            if e >= t:
+                group2.append(p)
+        else:
+            group3.append(p)
+
+    def g1_key(p):
+        s = _parse_dt(p["start"])
+        e = _parse_dt(p.get("end"))
+        return (-s.timestamp(), e.timestamp() if e else float("inf"))
+
+    group1.sort(key=g1_key)
+    group2.sort(key=lambda p: _parse_dt(p["end"]))
+    return group1 + group2 + group3
+
+
+def _resolve_config_for_zone(zone: str, level: int,
+                              plannings_by_precedence: list,
+                              t: datetime.datetime) -> tuple[str | None, str | None]:
+    """
+    Return (config_name, planning_name) for a zone+level at time t.
+    Iterates plannings by precedence, returns the first that covers this zone+level.
+    """
+    monday = (t - datetime.timedelta(days=t.weekday())).replace(
+        hour=0, minute=0, second=0, microsecond=0)
+
+    for planning in plannings_by_precedence:
+        cycle  = planning.get("cycle", "two-weeks-iso")
+        events = [e for e in planning.get("events", [])
+                  if isinstance(e, dict)
+                  and e.get("level") == level
+                  and e.get("config") is not None]
+
+        if not events:
+            continue
+
+        # Check if any event in this planning references this zone
+        wc_name = None
+        for ev in events:
+            cfg = ev.get("config")
+            if cfg:
+                wc_name = cfg
+                break
+
+        # Build candidates
+        parity = _week_parity(t, planning)
+        is_odd = (parity == "odd")
+        if is_odd:
+            odd_mon, even_mon = monday, monday + datetime.timedelta(weeks=1)
+            p_odd, p_even = monday - datetime.timedelta(weeks=2), monday - datetime.timedelta(weeks=1)
+        else:
+            even_mon, odd_mon = monday, monday + datetime.timedelta(weeks=1)
+            p_even, p_odd = monday - datetime.timedelta(weeks=2), monday - datetime.timedelta(weeks=1)
+
+        candidates = []
+        for ev in events:
+            week = ev.get("week", "both").lower()
+            d    = _DAY_MAP.get(ev.get("day", "monday").lower(), 0)
+            h, m = map(int, ev.get("time", "00:00").split(":"))
+            if cycle == "one-week":
+                for mon in [odd_mon, even_mon, p_odd, p_even]:
+                    candidates.append((mon + datetime.timedelta(days=d, hours=h, minutes=m),
+                                       ev["config"]))
+            else:
+                if week in ("odd", "both"):
+                    candidates.append((odd_mon + datetime.timedelta(days=d, hours=h, minutes=m), ev["config"]))
+                    candidates.append((p_odd   + datetime.timedelta(days=d, hours=h, minutes=m), ev["config"]))
+                if week in ("even", "both"):
+                    candidates.append((even_mon + datetime.timedelta(days=d, hours=h, minutes=m), ev["config"]))
+                    candidates.append((p_even   + datetime.timedelta(days=d, hours=h, minutes=m), ev["config"]))
+
+        if not candidates:
+            continue
+
+        past = [(dt, cfg) for dt, cfg in candidates if t >= dt]
+        if past:
+            _, cfg = max(past, key=lambda x: x[0])
+        else:
+            _, cfg = min(candidates, key=lambda x: x[0])
+
+        # Check if the resolved config covers this zone
+        weekconfigs = load_weekconfigs()
+        if cfg in weekconfigs and zone in weekconfigs[cfg]:
+            return cfg, planning.get("name")
+
+    return None, None
+
+
+def _all_zones_from_weekconfigs(weekconfigs: dict) -> list[str]:
+    zones = set()
+    for cfg in weekconfigs.values():
+        zones.update(cfg.keys())
+    return sorted(zones)
+
+
+# ---------------------------------------------------------------------------
+# STATUS — per zone
+# ---------------------------------------------------------------------------
+
+def get_status() -> dict:
+    """
+    Returns:
+      now, iso_week, parity,
+      plannings: list of all plannings with their current status/cycle info,
+      zones: {zone: {l1: {config, planning}, l2: {config, planning}}}
+    """
     try:
         plannings   = load_plannings()
         weekconfigs = load_weekconfigs()
+        now         = datetime.datetime.now()
+        iso_week    = now.isocalendar()[1]
+        parity      = "odd" if iso_week % 2 == 1 else "even"
 
-        if not plannings:
-            return {"error": "plannings.json is empty or missing"}
-
-        now      = datetime.datetime.now()
-        iso_week = now.isocalendar()[1]
-        parity   = "odd" if iso_week % 2 == 1 else "even"
-
-        DAY_NAMES_EN = {0:"Monday",1:"Tuesday",2:"Wednesday",
-                        3:"Thursday",4:"Friday",5:"Saturday",6:"Sunday"}
-        DAY_MAP = {"monday":0,"tuesday":1,"wednesday":2,
-                   "thursday":3,"friday":4,"saturday":5,"sunday":6}
-
-        def parse_dt(s):
-            if s is None:
-                return None
-            return datetime.datetime.strptime(s, "%Y-%m-%d %H:%M")
-
-        # Select active planning
-        group1, group2, group3 = [], [], []
+        # Build planning status list
+        planning_status = []
         for p in plannings:
-            start = parse_dt(p.get("start"))
-            end   = parse_dt(p.get("end"))
-            if start is not None:
-                if start <= now and (end is None or end >= now):
-                    group1.append(p)
-            elif end is not None:
-                if end >= now:
-                    group2.append(p)
+            s = _parse_dt(p.get("start"))
+            e = _parse_dt(p.get("end"))
+            if s is not None and s > now:
+                status = "upcoming"
+            elif e is not None and e < now:
+                status = "ended"
             else:
-                group3.append(p)
+                status = "active"
 
-        active = None
-        if group1:
-            group1.sort(key=lambda p: (
-                -parse_dt(p["start"]).timestamp(),
-                parse_dt(p["end"]).timestamp() if p.get("end") else float("inf")
-            ))
-            active = group1[0]
-        elif group2:
-            group2.sort(key=lambda p: parse_dt(p["end"]))
-            active = group2[0]
-        elif group3:
-            active = group3[0]
+            cycle    = p.get("cycle", "two-weeks-iso")
+            cycle_info = None
+            if status == "active":
+                if cycle == "two-weeks-iso":
+                    cycle_info = f"ISO week {iso_week} — {parity}"
+                elif cycle == "two-weeks-seq":
+                    par = _week_parity(now, p)
+                    cycle_info = f"week {'1' if par == 'odd' else '2'} of 2"
+                else:
+                    cycle_info = "week 1 of 1"
 
-        if not active:
-            return {"error": "No active planning found"}
+            period_str = None
+            if s or e:
+                parts = []
+                if s:
+                    parts.append(s.strftime("%d/%m %H:%M"))
+                else:
+                    parts.append("…")
+                parts.append("→")
+                if e:
+                    parts.append(e.strftime("%d/%m %H:%M"))
+                    # days remaining / ago
+                    delta = int((e - now).days)
+                    if status == "active":
+                        parts.append(f"· ends in {delta} days" if delta >= 0 else f"· ended {-delta} days ago")
+                    elif status == "upcoming":
+                        delta_s = int((s - now).days)
+                        parts.append(f"· starts in {delta_s} days")
+                else:
+                    parts.append("…")
+                period_str = " ".join(parts)
+            else:
+                period_str = "always active — no period"
 
-        cycle    = active.get("cycle", "two-weeks-iso")
-        ref_date = active.get("ref_date")
-        events   = active.get("events", [])
+            planning_status.append({
+                "name":       p.get("name"),
+                "status":     status,
+                "cycle":      cycle,
+                "cycle_info": cycle_info,
+                "period":     period_str,
+                "start":      p.get("start"),
+                "end":        p.get("end"),
+            })
 
-        # Resolve cycle parity
-        current_monday = now - datetime.timedelta(days=now.weekday())
-        current_monday = current_monday.replace(hour=0, minute=0, second=0, microsecond=0)
+        # Per-zone resolution
+        active_pls = _active_plannings_at(plannings, now)
+        all_zones  = _all_zones_from_weekconfigs(weekconfigs)
 
-        if cycle == "two-weeks-iso":
-            is_odd = (iso_week % 2 == 1)
-        elif cycle == "two-weeks-seq" and ref_date:
-            ref = datetime.datetime.strptime(ref_date, "%Y-%m-%d")
-            ref_monday = ref - datetime.timedelta(days=ref.weekday())
-            now_monday = now - datetime.timedelta(days=now.weekday())
-            is_odd = int((now_monday - ref_monday).days / 7) % 2 == 0
-        else:
-            is_odd = True
+        zones_status = {}
+        for zone in all_zones:
+            l1_cfg, l1_pl = _resolve_config_for_zone(zone, 1, active_pls, now)
+            l2_cfg, l2_pl = _resolve_config_for_zone(zone, 2, active_pls, now)
+            if l1_cfg or l2_cfg:
+                zones_status[zone] = {
+                    "l1": {"config": l1_cfg, "planning": l1_pl} if l1_cfg else None,
+                    "l2": {"config": l2_cfg, "planning": l2_pl} if l2_cfg else None,
+                }
 
-        if is_odd:
-            odd_monday, even_monday = current_monday, current_monday + datetime.timedelta(weeks=1)
-            p_odd, p_even = current_monday - datetime.timedelta(weeks=2), current_monday - datetime.timedelta(weeks=1)
-        else:
-            even_monday, odd_monday = current_monday, current_monday + datetime.timedelta(weeks=1)
-            p_even, p_odd = current_monday - datetime.timedelta(weeks=2), current_monday - datetime.timedelta(weeks=1)
-
-        def build_cycle(o_mon, e_mon, evts, level):
-            result = []
-            for ev in evts:
-                if ev.get("level") != level:
-                    continue
-                d = DAY_MAP.get(ev["day"].lower(), 0)
-                h, m = map(int, ev["time"].split(":"))
-                week = ev.get("week", "both").lower()
-                if cycle == "one-week" or week in ("odd", "both"):
-                    result.append((o_mon + datetime.timedelta(days=d, hours=h, minutes=m), ev["config"]))
-                if cycle != "one-week" and week in ("even", "both"):
-                    result.append((e_mon + datetime.timedelta(days=d, hours=h, minutes=m), ev["config"]))
-            result.sort(key=lambda x: x[0])
-            return result
-
-        result = {
+        return {
             "now":      now.strftime("%A %d/%m/%Y %H:%M"),
             "iso_week": iso_week,
             "parity":   parity,
-            "planning": active["name"],
-            "cycle":    cycle,
-            "level1":   None,
-            "level2":   None,
+            "plannings": planning_status,
+            "zones":    zones_status,
         }
-
-        for level in (1, 2):
-            curr = build_cycle(odd_monday, even_monday, events, level)
-            prev = build_cycle(p_odd, p_even, events, level)
-            if not curr:
-                continue
-            past = [(dt, cfg) for dt, cfg in curr if now >= dt]
-            if past:
-                past.sort(key=lambda x: x[0], reverse=True)
-                chosen_dt, chosen_cfg = past[0]
-            elif prev:
-                chosen_dt, chosen_cfg = sorted(prev, key=lambda x: x[0])[-1]
-            else:
-                chosen_dt, chosen_cfg = sorted(curr, key=lambda x: x[0])[-1]
-            result[f"level{level}"] = {
-                "config": chosen_cfg,
-                "since":  chosen_dt.strftime("%a %d/%m %H:%M")
-            }
-
-        return result
 
     except Exception as e:
         return {"error": str(e)}
 
 
 # ---------------------------------------------------------------------------
-# ROUTES — UI
+# TIMELINE — per zone, per level
 # ---------------------------------------------------------------------------
+
+def get_timeline(days: int = 14) -> dict:
+    """
+    Returns:
+      columns: list of {dt, label, boundaries: [{planning, type:'starts'|'ends'}]}
+      zones:   {zone: {l1: [col_idx_or_null, ...], l2: [...]}}
+               Each entry is either null (no change) or {config, planning}
+    """
+    try:
+        plannings   = load_plannings()
+        weekconfigs = load_weekconfigs()
+        now         = datetime.datetime.now()
+        end         = now + datetime.timedelta(days=days)
+
+        # --- Collect all moments ---
+        moments = set()
+        moments.add(now.replace(second=0, microsecond=0))
+
+        # Planning boundaries within window
+        boundaries = {}  # dt → list of {planning, type}
+        for p in plannings:
+            for field, btype in (("start", "starts"), ("end", "ends")):
+                val = p.get(field)
+                if val:
+                    dt = _parse_dt(val)
+                    if now <= dt <= end:
+                        moments.add(dt)
+                        moments.add(dt + datetime.timedelta(minutes=1))
+                        boundaries.setdefault(dt, []).append(
+                            {"planning": p["name"], "type": btype})
+
+        # Expand events week by week
+        for p in plannings:
+            cycle  = p.get("cycle", "two-weeks-iso")
+            events = [e for e in p.get("events", []) if isinstance(e, dict)]
+            scan   = now - datetime.timedelta(days=7)
+            while scan <= end + datetime.timedelta(days=7):
+                monday = (scan - datetime.timedelta(days=scan.weekday())).replace(
+                    hour=0, minute=0, second=0, microsecond=0)
+                parity = _week_parity(monday + datetime.timedelta(hours=12), p)
+                for ev in events:
+                    week = ev.get("week", "both").lower()
+                    d    = _DAY_MAP.get(ev.get("day", "monday").lower(), 0)
+                    h, m = map(int, ev.get("time", "00:00").split(":"))
+                    if cycle != "one-week":
+                        if week == "odd"  and parity != "odd":  continue
+                        if week == "even" and parity != "even": continue
+                    dt = monday + datetime.timedelta(days=d, hours=h, minutes=m)
+                    if now <= dt <= end:
+                        moments.add(dt)
+                scan += datetime.timedelta(weeks=1)
+
+        sorted_moments = sorted(moments)
+
+        # --- Build columns ---
+        columns = []
+        for i, t in enumerate(sorted_moments):
+            bds = []
+            # Check boundaries at t or at t-1min (for "after end" moments)
+            for bd_dt, bd_list in boundaries.items():
+                if t == bd_dt or t == bd_dt + datetime.timedelta(minutes=1):
+                    bds.extend(bd_list)
+            columns.append({
+                "dt":         t.strftime("%Y-%m-%d %H:%M"),
+                "label":      f"{_DAY_ABR[t.weekday()]} {t.strftime('%d/%m')}  {t.strftime('%H:%M')}",
+                "now":        (i == 0),
+                "boundaries": bds,
+            })
+
+        # --- Per-zone, per-level resolution at each moment ---
+        all_zones = _all_zones_from_weekconfigs(weekconfigs)
+        zones_tl  = {}
+
+        for zone in all_zones:
+            l1_prev = l2_prev = None
+            l1_row  = []
+            l2_row  = []
+            has_any = False
+
+            for t in sorted_moments:
+                active_pls = _active_plannings_at(plannings, t)
+                l1_cfg, l1_pl = _resolve_config_for_zone(zone, 1, active_pls, t)
+                l2_cfg, l2_pl = _resolve_config_for_zone(zone, 2, active_pls, t)
+
+                l1_entry = {"config": l1_cfg, "planning": l1_pl} if l1_cfg else None
+                l2_entry = {"config": l2_cfg, "planning": l2_pl} if l2_cfg else None
+
+                # Emit only on change (or first column)
+                l1_changed = (l1_cfg != l1_prev)
+                l2_changed = (l2_cfg != l2_prev)
+
+                l1_row.append(l1_entry if l1_changed else None)
+                l2_row.append(l2_entry if l2_changed else None)
+
+                if l1_entry or l2_entry:
+                    has_any = True
+
+                l1_prev = l1_cfg
+                l2_prev = l2_cfg
+
+            # Only include zones that have something
+            has_l2 = any(e is not None for e in l2_row if e)
+            if has_any:
+                zones_tl[zone] = {
+                    "l1": l1_row,
+                    "l2": l2_row if has_l2 else None,
+                }
+
+        return {
+            "columns": columns,
+            "zones":   zones_tl,
+        }
+
+    except Exception as e:
+        return {"error": str(e)}
+
 
 @app.route("/")
 def index():
-    ingress_path = request.headers.get("X-Ingress-Path", "")
-    return render_template("index.html", ingress_path=ingress_path)
+    return render_template("index.html")
 
-
-# ---------------------------------------------------------------------------
-# API — STATUS
-# ---------------------------------------------------------------------------
 
 @app.route("/api/status")
 def api_status():
-    return jsonify(get_active_status())
+    return jsonify(get_status())
+
+
+@app.route("/api/timeline")
+def api_timeline():
+    days = int(request.args.get("days", 14))
+    return jsonify(get_timeline(days))
+
 
 
 # ---------------------------------------------------------------------------

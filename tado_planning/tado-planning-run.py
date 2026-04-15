@@ -390,7 +390,7 @@ def validate_all(plannings: list, weekconfigs: dict) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# PLANNING SELECTION
+# PLANNING SELECTION — per zone
 # ---------------------------------------------------------------------------
 
 def _parse_dt_safe(s: str | None) -> datetime.datetime | None:
@@ -399,61 +399,97 @@ def _parse_dt_safe(s: str | None) -> datetime.datetime | None:
     return datetime.datetime.strptime(s, "%Y-%m-%d %H:%M")
 
 
-def select_planning(plannings: list, now: datetime.datetime) -> dict:
-    """
-    Select the active planning for the given datetime.
-    Precedence rules:
-        1. start present, start <= now → latest start wins;
-                                         equal start → earliest end wins
-        2. start absent, end present, end >= now → earliest end wins
-        3. start absent, end absent → the standard (fallback)
-    """
-    group1 = []  # with start <= now
-    group2 = []  # without start, with end >= now
-    group3 = []  # without start, without end (standard)
-
+def active_plannings_at(plannings: list, now: datetime.datetime) -> list:
+    """Return all plannings active at `now`, sorted by precedence (highest first)."""
+    group1, group2, group3 = [], [], []
     for p in plannings:
-        start = _parse_dt_safe(p.get("start"))
-        end   = _parse_dt_safe(p.get("end"))
-
-        if start is not None:
-            if start <= now:
-                if end is None or end >= now:
-                    group1.append(p)
-        elif end is not None:
-            if end >= now:
+        s = _parse_dt_safe(p.get("start"))
+        e = _parse_dt_safe(p.get("end"))
+        if s is not None:
+            if s <= now and (e is None or e >= now):
+                group1.append(p)
+        elif e is not None:
+            if e >= now:
                 group2.append(p)
         else:
             group3.append(p)
 
-    if group1:
-        # latest start wins; tie → earliest end wins (None = infinity, loses)
-        def g1_sort(p):
-            start = _parse_dt_safe(p["start"])
-            end   = _parse_dt_safe(p.get("end"))
-            end_key = end if end is not None else datetime.datetime.max
-            return (-start.timestamp(), end_key.timestamp())
-        group1.sort(key=g1_sort)
-        chosen = group1[0]
-        log(f"[PLANNING] Selected '{chosen['name']}' "
-            f"(start={chosen.get('start')}, end={chosen.get('end') or '—'})")
-        return chosen
+    def g1_key(p):
+        s = _parse_dt_safe(p["start"])
+        e = _parse_dt_safe(p.get("end"))
+        return (-s.timestamp(), e.timestamp() if e else float("inf"))
 
-    if group2:
-        # earliest end wins
-        group2.sort(key=lambda p: _parse_dt_safe(p["end"]))
-        chosen = group2[0]
-        log(f"[PLANNING] Selected '{chosen['name']}' "
-            f"(no start, end={chosen.get('end')})")
-        return chosen
+    group1.sort(key=g1_key)
+    group2.sort(key=lambda p: _parse_dt_safe(p["end"]))
+    return group1 + group2 + group3
 
-    if group3:
-        chosen = group3[0]
-        log(f"[PLANNING] Selected '{chosen['name']}' (standard — no start, no end)")
-        return chosen
 
-    log("[ERROR] No active planning found for current date/time.")
-    sys.exit(1)
+def resolve_config_for_zone(zone: str, level: int,
+                             plannings_by_precedence: list,
+                             now: datetime.datetime,
+                             weekconfigs: dict) -> tuple[str | None, str | None]:
+    """
+    Return (config_name, planning_name) for a zone+level at time now.
+    Walks plannings by precedence, returns the first that covers this zone+level.
+    """
+    monday = (now - datetime.timedelta(days=now.weekday())).replace(
+        hour=0, minute=0, second=0, microsecond=0)
+
+    for planning in plannings_by_precedence:
+        cycle  = planning.get("cycle", "two-weeks-iso")
+        events = [e for e in planning.get("events", [])
+                  if isinstance(e, dict) and e.get("level") == level
+                  and e.get("config") is not None]
+        if not events:
+            continue
+
+        # Determine parity for this planning
+        ref_date = planning.get("ref_date")
+        if cycle == "two-weeks-iso":
+            iso_week = now.isocalendar()[1]
+            is_odd   = (iso_week % 2 == 1)
+        elif cycle == "two-weeks-seq" and ref_date:
+            ref     = datetime.datetime.strptime(ref_date, "%Y-%m-%d")
+            ref_mon = ref - datetime.timedelta(days=ref.weekday())
+            now_mon = now - datetime.timedelta(days=now.weekday())
+            is_odd  = int((now_mon - ref_mon).days / 7) % 2 == 0
+        else:
+            is_odd = True
+
+        if is_odd:
+            odd_mon, even_mon = monday, monday + datetime.timedelta(weeks=1)
+            p_odd, p_even = monday - datetime.timedelta(weeks=2), monday - datetime.timedelta(weeks=1)
+        else:
+            even_mon, odd_mon = monday, monday + datetime.timedelta(weeks=1)
+            p_even, p_odd = monday - datetime.timedelta(weeks=2), monday - datetime.timedelta(weeks=1)
+
+        candidates = []
+        for ev in events:
+            week = ev.get("week", "both").lower()
+            d    = DAY_NAMES.get(ev["day"].lower(), 0)
+            h, m = map(int, ev["time"].split(":"))
+            if cycle == "one-week":
+                for mon in [odd_mon, even_mon, p_odd, p_even]:
+                    candidates.append((mon + datetime.timedelta(days=d, hours=h, minutes=m), ev["config"]))
+            else:
+                if week in ("odd", "both"):
+                    candidates.append((odd_mon + datetime.timedelta(days=d, hours=h, minutes=m), ev["config"]))
+                    candidates.append((p_odd   + datetime.timedelta(days=d, hours=h, minutes=m), ev["config"]))
+                if week in ("even", "both"):
+                    candidates.append((even_mon + datetime.timedelta(days=d, hours=h, minutes=m), ev["config"]))
+                    candidates.append((p_even   + datetime.timedelta(days=d, hours=h, minutes=m), ev["config"]))
+
+        if not candidates:
+            continue
+
+        past = [(dt, cfg) for dt, cfg in candidates if now >= dt]
+        cfg  = max(past, key=lambda x: x[0])[1] if past else min(candidates, key=lambda x: x[0])[1]
+
+        # Check if resolved config covers this zone
+        if cfg in weekconfigs and zone in weekconfigs[cfg]:
+            return cfg, planning.get("name")
+
+    return None, None
 
 
 # ---------------------------------------------------------------------------
@@ -798,7 +834,7 @@ def apply_zone_config(tado: Tado, zone_id: int, zone_key: str, zone_cfg: dict):
 
 
 def apply_level(tado: Tado, level: int, config_name: str,
-                weekconfigs: dict, planning_name: str):
+                weekconfigs: dict, source_label: str = ""):
     zone_cfg_map = weekconfigs[config_name]
     zone_targets = list(zone_cfg_map.keys())
 
@@ -904,35 +940,31 @@ def main():
     if not validate_all(plannings, weekconfigs):
         sys.exit(1)
 
-    # Step 3 — select active planning
-    active_planning = select_planning(plannings, now)
-    planning_name   = active_planning["name"]
-    cycle           = active_planning["cycle"]
-    ref_date        = active_planning.get("ref_date")
-    events          = active_planning.get("events", [])
+    # Step 3 — find active plannings (by precedence)
+    active_pls = active_plannings_at(plannings, now)
+    log(f"[INFO] Active plannings : {[p['name'] for p in active_pls]}")
 
-    log(f"[INFO] Active planning : '{planning_name}' (cycle: {cycle})")
+    # Step 4 — resolve per zone, per level
+    all_zones = sorted({z for cfg in weekconfigs.values() for z in cfg.keys()})
+    log(f"[INFO] Zones to process : {len(all_zones)}")
 
-    # Step 4 — resolve configs per level
-    config_l1, since_l1 = select_config_for_level(events, 1, now, cycle, ref_date)
-    config_l2, since_l2 = select_config_for_level(events, 2, now, cycle, ref_date)
+    # Collect unique (level, config) pairs to apply, noting which zones each covers
+    # Structure: {level: {config_name: [zone, ...]}}
+    to_apply = {1: {}, 2: {}}
+    for zone in all_zones:
+        for level in (1, 2):
+            cfg, pl_name = resolve_config_for_zone(zone, level, active_pls, now, weekconfigs)
+            if cfg:
+                to_apply[level].setdefault(cfg, []).append(zone)
+                log(f"[INFO] {zone} L{level} → {cfg} (from {pl_name})", 1)
 
-    if config_l1 is None:
-        log(f"[ERROR] No level 1 config resolved from planning '{planning_name}'")
-        sys.exit(1)
-
-    since_l1_str = since_l1.strftime("%a %d/%m %H:%M") if since_l1 else "?"
-    since_l2_str = since_l2.strftime("%a %d/%m %H:%M") if since_l2 else "?"
-    log(f"[INFO] Level 1 config  : '{config_l1}' (since {since_l1_str})")
-    if config_l2:
-        log(f"[INFO] Level 2 config  : '{config_l2}' (since {since_l2_str})")
-    else:
-        log(f"[INFO] Level 2 config  : (none)")
+    if not to_apply[1] and not to_apply[2]:
+        log("[WARN] No configs resolved for any zone — nothing to apply.")
 
     # Summary at verbosity 1
-    print_config_summary(config_l1, weekconfigs[config_l1], 1)
-    if config_l2:
-        print_config_summary(config_l2, weekconfigs[config_l2], 2)
+    for level in (1, 2):
+        for cfg in to_apply[level]:
+            print_config_summary(cfg, weekconfigs[cfg], level)
 
     # Step 5 — connect and apply
     log("[TADO] Connecting...")
@@ -940,10 +972,11 @@ def main():
     home_name = tado.get_me()["homes"][0]["name"]
     log(f"[TADO] Home: '{home_name}'")
 
-    apply_level(tado, 1, config_l1, weekconfigs, planning_name)
-
-    if config_l2:
-        apply_level(tado, 2, config_l2, weekconfigs, planning_name)
+    for level in (1, 2):
+        for cfg, zones in to_apply[level].items():
+            # Build a subset weekconfig containing only the relevant zones
+            subset = {z: weekconfigs[cfg][z] for z in zones if z in weekconfigs[cfg]}
+            apply_level(tado, level, cfg, {cfg: subset}, f"(zones: {', '.join(zones)})")
 
 
 if __name__ == "__main__":
