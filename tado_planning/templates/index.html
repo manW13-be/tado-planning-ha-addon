@@ -132,6 +132,34 @@ body { font-family: var(--font); background: var(--bg); color: var(--text);
 .status-value { font-size: 18px; font-weight: 700; }
 .status-sub { font-size: 12px; color: var(--muted); margin-top: 3px; }
 
+/* ── TIMELINE ── */
+.timeline { margin-top: 24px; }
+.timeline-title { font-size: 13px; font-weight: 700; color: var(--muted);
+                  text-transform: uppercase; letter-spacing: .06em; margin-bottom: 12px; }
+.tl-row { display: grid; grid-template-columns: 160px 1fr;
+          gap: 0; position: relative; }
+.tl-row + .tl-row { margin-top: 2px; }
+.tl-time { font-family: var(--mono); font-size: 12.5px; color: var(--muted);
+           padding: 7px 12px 7px 0; white-space: nowrap; }
+.tl-row.tl-now .tl-time { color: var(--accent); font-weight: 700; }
+.tl-content { display: flex; flex-direction: column; gap: 3px;
+              padding: 6px 12px; border-left: 2px solid var(--border);
+              background: var(--surface); border-radius: 0 6px 6px 0; }
+.tl-row.tl-now .tl-content { border-left-color: var(--accent); background: #eff6ff; }
+.tl-row.tl-plan-change .tl-content { border-left-color: var(--orange); background: var(--warn-bg); }
+.tl-planning { font-size: 11px; color: var(--orange); font-weight: 600;
+               display: flex; align-items: center; gap: 4px; }
+.tl-configs { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.tl-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px;
+           border-radius: 10px; font-size: 12px; font-weight: 500; }
+.tl-chip.l1 { background: #dbeafe; color: var(--l1); }
+.tl-chip.l2 { background: #ede9fe; color: var(--l2); }
+.tl-chip.l1-dim { background: #f1f5f9; color: var(--muted); font-size: 11px; }
+.tl-chip.l2-dim { background: #f5f3ff; color: #a78bfa; font-size: 11px; }
+.tl-chip-label { font-size: 10px; font-weight: 700; opacity: .7; }
+.tl-now-marker { font-size: 11px; font-weight: 700; color: var(--accent);
+                 padding: 2px 6px; background: #dbeafe; border-radius: 4px; }
+
 /* ── ZONE EDITOR ── */
 .zone-list { display: flex; flex-direction: column; gap: 8px; }
 .zone-card { border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
@@ -266,27 +294,30 @@ body { font-family: var(--font); background: var(--bg); color: var(--text);
   <section class="section" id="sec-weekconfigs">
     <div class="section-header">
       <h1>Weekconfigs</h1>
-      <div style="display:flex;gap:8px">
-        <button class="btn btn-secondary btn-sm" onclick="openModal('wc-new')">+ New</button>
-        <button class="btn btn-secondary btn-sm" onclick="openModal('wc-copy-from')">⎘ Copy</button>
-      </div>
     </div>
     <div class="section-body">
       <div class="split">
         <div class="list-panel">
           <div class="list-panel-header">
             <span class="list-panel-title">Configs</span>
+            <div style="display:flex;gap:4px">
+              <button class="btn btn-secondary btn-sm" onclick="wcNew()">+ New</button>
+              <button class="btn btn-secondary btn-sm" onclick="wcCopyFrom()">⎘ Copy</button>
+            </div>
           </div>
           <div class="list-panel-body" id="wcList"></div>
         </div>
         <div class="detail-panel">
           <div class="detail-header" id="wcDetailHeader" style="display:none">
-            <span id="wcDetailName" style="font-weight:600;font-size:14px"></span>
+            <div style="display:flex;align-items:center;gap:10px;flex:1">
+              <input class="form-input" id="wcDetailName" placeholder="Config name"
+                style="max-width:200px;font-weight:600" oninput="state.wcName=this.value">
+              <div id="wcNameErr" style="font-size:12px;color:var(--red)"></div>
+            </div>
             <div style="display:flex;gap:6px">
-              <button class="btn btn-secondary btn-sm" onclick="wcRename()">Rename</button>
               <button class="btn btn-secondary btn-sm" onclick="wcCopyZone()">+ Copy zone</button>
               <button class="btn btn-secondary btn-sm" onclick="wcAddZone()">+ Zone</button>
-              <button class="btn btn-danger btn-sm" onclick="wcDelete()">Delete</button>
+              <button class="btn btn-danger btn-sm" id="wcDeleteBtn" onclick="wcDelete()">Delete</button>
               <button class="btn btn-primary btn-sm" onclick="wcSave()">Save</button>
             </div>
           </div>
@@ -303,25 +334,28 @@ body { font-family: var(--font); background: var(--bg); color: var(--text);
   <section class="section" id="sec-plannings">
     <div class="section-header">
       <h1>Plannings</h1>
-      <div style="display:flex;gap:8px">
-        <button class="btn btn-secondary btn-sm" onclick="openModal('pl-new')">+ New</button>
-        <button class="btn btn-secondary btn-sm" onclick="openModal('pl-copy-from')">⎘ Copy</button>
-      </div>
     </div>
     <div class="section-body">
       <div class="split">
         <div class="list-panel">
           <div class="list-panel-header">
             <span class="list-panel-title">Plannings</span>
+            <div style="display:flex;gap:4px">
+              <button class="btn btn-secondary btn-sm" onclick="plNew()">+ New</button>
+              <button class="btn btn-secondary btn-sm" onclick="plCopyFrom()">⎘ Copy</button>
+            </div>
           </div>
           <div class="list-panel-body" id="plList"></div>
         </div>
         <div class="detail-panel">
           <div class="detail-header" id="plDetailHeader" style="display:none">
-            <span id="plDetailName" style="font-weight:600;font-size:14px"></span>
+            <div style="display:flex;align-items:center;gap:10px;flex:1">
+              <input class="form-input" id="plDetailName" placeholder="Planning name"
+                style="max-width:200px;font-weight:600" oninput="state.plData.name=this.value">
+              <div id="plNameErr" style="font-size:12px;color:var(--red)"></div>
+            </div>
             <div style="display:flex;gap:6px">
-              <button class="btn btn-secondary btn-sm" onclick="plRename()">Rename</button>
-              <button class="btn btn-danger btn-sm" onclick="plDelete()">Delete</button>
+              <button class="btn btn-danger btn-sm" id="plDeleteBtn" onclick="plDelete()">Delete</button>
               <button class="btn btn-primary btn-sm" onclick="plSave()">Save</button>
             </div>
           </div>
@@ -341,40 +375,6 @@ body { font-family: var(--font); background: var(--bg); color: var(--text);
 <div id="toast" class="toast"></div>
 
 <!-- MODALS -->
-<div class="modal-overlay" id="modal-wc-new">
-  <div class="modal">
-    <div class="modal-title">New weekconfig</div>
-    <div class="form-group">
-      <label class="form-label">Name</label>
-      <input class="form-input" id="wc-new-name" placeholder="e.g. kidsaway_summer">
-      <div class="form-error" id="wc-new-err"></div>
-    </div>
-    <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="closeModal('wc-new')">Cancel</button>
-      <button class="btn btn-primary" onclick="wcCreateNew()">Create</button>
-    </div>
-  </div>
-</div>
-
-<div class="modal-overlay" id="modal-wc-copy-from">
-  <div class="modal">
-    <div class="modal-title">Copy weekconfig</div>
-    <div class="form-group">
-      <label class="form-label">Source</label>
-      <select class="form-select" id="wc-copy-src"></select>
-    </div>
-    <div class="form-group">
-      <label class="form-label">New name</label>
-      <input class="form-input" id="wc-copy-name" placeholder="new config name">
-      <div class="form-error" id="wc-copy-err"></div>
-    </div>
-    <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="closeModal('wc-copy-from')">Cancel</button>
-      <button class="btn btn-primary" onclick="wcCopyConfig()">Copy</button>
-    </div>
-  </div>
-</div>
-
 <div class="modal-overlay" id="modal-wc-add-zone">
   <div class="modal">
     <div class="modal-title">Add zone</div>
@@ -414,21 +414,6 @@ body { font-family: var(--font); background: var(--bg); color: var(--text);
   </div>
 </div>
 
-<div class="modal-overlay" id="modal-rename">
-  <div class="modal">
-    <div class="modal-title" id="rename-title">Rename</div>
-    <div class="form-group">
-      <label class="form-label">New name</label>
-      <input class="form-input" id="rename-input">
-      <div class="form-error" id="rename-err"></div>
-    </div>
-    <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="closeModal('rename')">Cancel</button>
-      <button class="btn btn-primary" onclick="confirmRename()">Rename</button>
-    </div>
-  </div>
-</div>
-
 <div class="modal-overlay" id="modal-confirm">
   <div class="modal">
     <div class="modal-title" id="confirm-title">Confirm</div>
@@ -436,40 +421,6 @@ body { font-family: var(--font); background: var(--bg); color: var(--text);
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal('confirm')">Cancel</button>
       <button class="btn btn-danger" id="confirm-ok" onclick="">Confirm</button>
-    </div>
-  </div>
-</div>
-
-<div class="modal-overlay" id="modal-pl-new">
-  <div class="modal">
-    <div class="modal-title">New planning</div>
-    <div class="form-group">
-      <label class="form-label">Name</label>
-      <input class="form-input" id="pl-new-name" placeholder="e.g. summer2026">
-      <div class="form-error" id="pl-new-err"></div>
-    </div>
-    <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="closeModal('pl-new')">Cancel</button>
-      <button class="btn btn-primary" onclick="plCreateNew()">Create</button>
-    </div>
-  </div>
-</div>
-
-<div class="modal-overlay" id="modal-pl-copy-from">
-  <div class="modal">
-    <div class="modal-title">Copy planning</div>
-    <div class="form-group">
-      <label class="form-label">Source</label>
-      <select class="form-select" id="pl-copy-src"></select>
-    </div>
-    <div class="form-group">
-      <label class="form-label">New name</label>
-      <input class="form-input" id="pl-copy-name" placeholder="new planning name">
-      <div class="form-error" id="pl-copy-err"></div>
-    </div>
-    <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="closeModal('pl-copy-from')">Cancel</button>
-      <button class="btn btn-primary" onclick="plCopyPlanning()">Copy</button>
     </div>
   </div>
 </div>
@@ -491,15 +442,17 @@ const TT_KEYS = {
 const PREHEAT_OPTS = ["off","ECO","BALANCE","COMFORT"];
 
 let state = {
-  wc: {},          // all weekconfigs
-  wcCurrent: null, // current config name being edited
-  wcData: null,    // deep copy of current config zones
+  wc: {},           // all weekconfigs
+  wcCurrent: null,  // persisted name of selected config
+  wcIsNew:   false, // true while editing an unsaved new config
+  wcName:    null,  // name field value (may differ from wcCurrent during rename)
+  wcData:    null,  // zones being edited
 
-  pl: [],          // all plannings array
-  plCurrent: null, // current planning name
-  plData: null,    // deep copy of current planning
+  pl: [],           // all plannings
+  plCurrent: null,  // persisted name of selected planning
+  plIsNew:   false, // true while editing an unsaved new planning
+  plData:    null,  // planning being edited
 
-  renameTarget: null,  // {type:'wc'|'pl', name}
   confirmCb: null,
 };
 
@@ -566,38 +519,146 @@ async function loadStatus() {
   const el = document.getElementById("statusBody");
   el.innerHTML = `<div class="empty"><div class="empty-icon">⏳</div><div class="empty-text">Loading...</div></div>`;
   try {
-    const { data } = await api("GET", "/status");
-    if (data.error) {
-      el.innerHTML = `<div class="alert alert-error">${data.error}</div>`;
+    const [statusRes, tlRes] = await Promise.all([
+      api("GET", "/status"),
+      api("GET", "/timeline")
+    ]);
+    const d  = statusRes.data;
+    const tl = tlRes.data;
+    if (d.error) { el.innerHTML = `<div class="alert alert-error">${d.error}</div>`; return; }
+    if (tl.error) { el.innerHTML = `<div class="alert alert-error">${tl.error}</div>`; return; }
+
+    let html = '';
+
+    // ── Planning cards ──
+    html += `<div style="font-size:12px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;">Plannings</div>`;
+    html += `<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:1.5rem;">`;
+    (d.plannings || []).forEach(p => {
+      const badgeColor = p.status === 'active'   ? 'badge-green'
+                       : p.status === 'upcoming' ? 'badge-gray'
+                       : 'badge-gray';
+      const opacity = p.status === 'ended' ? 'opacity:.45;' : p.status === 'upcoming' ? 'opacity:.6;' : '';
+      html += `<div style="border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;
+                display:grid;grid-template-columns:1fr auto;gap:8px;align-items:start;${opacity}">
+        <div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+            <span style="font-size:13px;font-weight:600;">${p.name}</span>
+            <span class="badge ${badgeColor}">${p.status}</span>
+            <span class="badge badge-gray">${p.cycle}</span>
+          </div>
+          <div style="font-size:12px;color:var(--muted);">${p.period}</div>
+        </div>
+        <div style="font-size:12px;color:var(--muted);text-align:right;white-space:nowrap;">
+          ${p.cycle_info ? `<div>${p.cycle_info}</div>` : '<div>—</div>'}
+        </div>
+      </div>`;
+    });
+    html += `</div>`;
+
+    // ── Timeline table ──
+    const cols  = tl.columns || [];
+    const zones = tl.zones   || {};
+    const zoneNames = Object.keys(zones);
+
+    if (!cols.length || !zoneNames.length) {
+      html += `<div class="empty"><div class="empty-text">No schedule data available.</div></div>`;
+      el.innerHTML = html;
       return;
     }
-    let html = `<div class="status-grid">`;
-    html += `<div class="status-card">
-      <div class="status-label">Current time</div>
-      <div class="status-value" style="font-size:15px;font-family:var(--mono)">${data.now}</div>
-      <div class="status-sub">ISO week ${data.iso_week} — ${data.parity}</div>
+
+    html += `<div style="font-size:12px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;">Schedule — next 14 days by zone</div>`;
+    html += `<div style="overflow-x:auto;">`;
+    html += `<table style="border-collapse:collapse;font-size:13px;width:100%;table-layout:fixed;min-width:${110+48+(cols.length*130)}px;">`;
+
+    // colgroup
+    html += `<colgroup><col style="width:110px;"><col style="width:48px;">`;
+    cols.forEach(() => html += `<col style="width:130px;">`);
+    html += `</colgroup>`;
+
+    // thead
+    html += `<thead><tr>`;
+    html += `<th style="text-align:left;padding:6px 8px;font-size:11px;font-weight:500;color:var(--muted);border-bottom:0.5px solid var(--border);">Zone</th>`;
+    html += `<th style="text-align:center;padding:6px 4px;font-size:11px;font-weight:500;color:var(--muted);border-bottom:0.5px solid var(--border);">Lvl</th>`;
+    cols.forEach((col, i) => {
+      const bdHtml = (col.boundaries || []).map(b =>
+        `<div style="font-size:10px;margin-top:2px;display:inline-block;padding:1px 5px;border-radius:3px;
+          background:var(--bg);color:var(--muted);border:0.5px solid var(--border);">${b.planning} ${b.type}</div>`
+      ).join('');
+      const nowMark = col.now
+        ? `<div style="font-size:11px;font-weight:500;color:var(--accent);">▶ now</div>`
+        : `<div style="font-size:11px;font-weight:500;color:var(--muted);">${col.label.split('  ')[0]}</div>`;
+      const timePart = col.now
+        ? `<div style="font-size:10px;color:var(--muted);">${col.label.split('  ')[1] || ''}</div>`
+        : `<div style="font-size:10px;color:var(--muted);">${col.label.split('  ')[1] || ''}</div>`;
+      html += `<th style="padding:6px 8px;border-bottom:0.5px solid var(--border);">
+        ${nowMark}${timePart}${bdHtml}
+      </th>`;
+    });
+    html += `</tr></thead>`;
+
+    // tbody
+    html += `<tbody>`;
+    zoneNames.forEach((zone, zi) => {
+      const zd       = zones[zone];
+      const l1Row    = zd.l1 || [];
+      const l2Row    = zd.l2;
+      const lastZone = zi === zoneNames.length - 1;
+      const zBorder  = `border-bottom:${lastZone ? '0' : '1'}px solid var(--border);`;
+
+      const renderRows = (row, lvl, lvlColor, isLast) => {
+        let r = `<tr>`;
+        if (isLast && !l2Row) {
+          r += `<td rowspan="1" style="padding:8px;font-weight:500;font-size:13px;vertical-align:middle;border-right:0.5px solid var(--border);${zBorder}">${zone}</td>`;
+        } else if (lvl === 'L1') {
+          const rowspan = l2Row ? 2 : 1;
+          r += `<td rowspan="${rowspan}" style="padding:8px;font-weight:500;font-size:13px;vertical-align:middle;border-right:0.5px solid var(--border);${zBorder}">${zone}</td>`;
+        }
+        r += `<td style="text-align:center;padding:4px;font-size:11px;font-weight:500;color:${lvlColor};border-right:0.5px solid var(--border);border-bottom:0.5px solid var(--border);">${lvl}</td>`;
+        row.forEach((cell, ci) => {
+          const isExc = cell && cell.planning !== (d.plannings.find(p => !p.start && !p.end) || {}).name;
+          const bg = cell && isExc ? 'background:var(--color-background-info,#eff6ff);' : '';
+          const nameColor = cell && isExc ? 'color:var(--accent);' : 'color:var(--text);';
+          const bdBottom = `border-bottom:0.5px solid var(--border);`;
+          if (!cell) {
+            r += `<td style="padding:6px 8px;font-size:12px;color:var(--muted);${bdBottom}">—</td>`;
+          } else {
+            r += `<td style="padding:6px 8px;${bg}${bdBottom}">
+              <div style="font-size:12px;font-weight:500;${nameColor}">${cell.config}</div>
+              <div style="font-size:10px;color:var(--muted);">${cell.planning}</div>
+            </td>`;
+          }
+        });
+        r += `</tr>`;
+        return r;
+      };
+
+      if (l2Row) {
+        html += renderRows(l1Row, 'L1', 'var(--l1)', false);
+        html += renderRows(l2Row, 'L2', 'var(--l2)', true);
+      } else {
+        html += renderRows(l1Row, 'L1', 'var(--l1)', true);
+      }
+    });
+    html += `</tbody></table></div>`;
+
+    // Legend
+    html += `<div style="font-size:11px;color:var(--muted);margin-top:10px;display:flex;gap:16px;flex-wrap:wrap;">
+      <span><span style="display:inline-block;width:10px;height:10px;background:var(--color-background-info,#eff6ff);border-radius:2px;margin-right:4px;"></span>exception planning</span>
+      <span>no background = standard planning</span>
+      <span>— = no change at this moment</span>
     </div>`;
-    html += `<div class="status-card">
-      <div class="status-label">Active planning</div>
-      <div class="status-value" style="font-size:15px">${data.planning}</div>
-      <div class="status-sub">cycle: ${data.cycle}</div>
-    </div>`;
-    if (data.level1) html += `<div class="status-card l1">
-      <div class="status-label">Level 1 config</div>
-      <div class="status-value">${data.level1.config}</div>
-      <div class="status-sub">since ${data.level1.since}</div>
-    </div>`;
-    if (data.level2) html += `<div class="status-card l2">
-      <div class="status-label">Level 2 config</div>
-      <div class="status-value">${data.level2.config}</div>
-      <div class="status-sub">since ${data.level2.since}</div>
-    </div>`;
-    html += `</div>`;
+
     el.innerHTML = html;
   } catch(e) {
     el.innerHTML = `<div class="alert alert-error">Connection error: ${e.message}</div>`;
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// WEEKCONFIGS — STATE
+// ─────────────────────────────────────────────────────────────────────────
+// state.wcName  = name being edited (may differ from persisted name for new items)
+// state.wcIsNew = true if not yet saved to server
 
 // ─────────────────────────────────────────────────────────────────────────
 // WEEKCONFIGS — LIST
@@ -607,31 +668,63 @@ async function loadWeekconfigs() {
     const { data } = await api("GET", "/weekconfigs");
     state.wc = data.weekconfigs || {};
     renderWcList();
-    if (state.wcCurrent && state.wc[state.wcCurrent]) {
-      selectWc(state.wcCurrent);
+    if (state.wcCurrent && (state.wc[state.wcCurrent] || state.wcIsNew)) {
+      renderWcDetail();
     }
   } catch(e) { toast(e.message, "err"); }
 }
 
 function renderWcList() {
-  const el  = document.getElementById("wcList");
+  const el    = document.getElementById("wcList");
   const names = Object.keys(state.wc);
-  if (!names.length) {
-    el.innerHTML = `<div class="empty"><div class="empty-text">No configs yet</div></div>`;
-    return;
+  let html = '';
+  if (state.wcIsNew) {
+    html += `<div class="item-row active">
+      <div><div class="item-name" style="color:var(--accent)">${state.wcName || '(new)'} <span style="font-size:11px;color:var(--muted)">unsaved</span></div></div>
+    </div>`;
   }
-  el.innerHTML = names.map(n => `
-    <div class="item-row ${n === state.wcCurrent ? 'active' : ''}" onclick="selectWc('${n}')">
-      <div>
-        <div class="item-name">${n}</div>
-        <div class="item-meta">${Object.keys(state.wc[n]).length} zone(s)</div>
-      </div>
-    </div>`).join("");
+  if (!names.length && !state.wcIsNew) {
+    html += `<div class="empty"><div class="empty-text">No configs yet</div></div>`;
+  } else {
+    html += names.map(n => `
+      <div class="item-row ${!state.wcIsNew && n === state.wcCurrent ? 'active' : ''}" onclick="selectWc('${n}')">
+        <div>
+          <div class="item-name">${n}</div>
+          <div class="item-meta">${Object.keys(state.wc[n]).length} zone(s)</div>
+        </div>
+      </div>`).join('');
+  }
+  el.innerHTML = html;
+}
+
+function wcNew() {
+  state.wcCurrent = null;
+  state.wcIsNew   = true;
+  state.wcName    = '';
+  state.wcData    = {};
+  renderWcList();
+  renderWcDetail();
+}
+
+function wcCopyFrom() {
+  const names = Object.keys(state.wc);
+  if (!names.length) { toast("No configs to copy from", "err"); return; }
+  // Pick first or current as source, open editor as new
+  const src = state.wcCurrent || names[0];
+  state.wcCurrent = null;
+  state.wcIsNew   = true;
+  state.wcName    = '';
+  state.wcData    = JSON.parse(JSON.stringify(state.wc[src]));
+  renderWcList();
+  renderWcDetail();
+  toast(`Copied from '${src}' — edit name and save`, '');
 }
 
 function selectWc(name) {
   state.wcCurrent = name;
-  state.wcData = JSON.parse(JSON.stringify(state.wc[name]));
+  state.wcIsNew   = false;
+  state.wcName    = name;
+  state.wcData    = JSON.parse(JSON.stringify(state.wc[name]));
   renderWcList();
   renderWcDetail();
 }
@@ -642,14 +735,18 @@ function selectWc(name) {
 function renderWcDetail() {
   const header = document.getElementById("wcDetailHeader");
   const body   = document.getElementById("wcDetail");
-  if (!state.wcCurrent) {
+  if (!state.wcIsNew && !state.wcCurrent) {
     header.style.display = "none";
-    body.innerHTML = `<div class="empty"><div class="empty-icon">📋</div><div class="empty-text">Select a config</div></div>`;
+    body.innerHTML = `<div class="empty"><div class="empty-icon">📋</div><div class="empty-text">Select a config or create a new one</div></div>`;
     return;
   }
   header.style.display = "flex";
-  document.getElementById("wcDetailName").textContent = state.wcCurrent;
-  const zones = state.wcData;
+  document.getElementById("wcDetailName").value = state.wcName || '';
+  document.getElementById("wcNameErr").textContent = '';
+  // Hide delete for unsaved new
+  document.getElementById("wcDeleteBtn").style.display = state.wcIsNew ? "none" : "";
+
+  const zones = state.wcData || {};
   if (!Object.keys(zones).length) {
     body.innerHTML = `<div class="empty"><div class="empty-text">No zones. Click "+ Zone" to add one.</div></div>`;
     return;
@@ -664,13 +761,11 @@ function renderZoneCard(zname, zcfg) {
 
   let slotsHtml = "";
   if (hasTT) {
-    // Tab buttons for multi-key timetables
     const tabBtns = keys.length > 1
       ? `<div class="tt-tabs">${keys.map((k,i) =>
           `<button class="tt-tab ${i===0?'active':''}" onclick="wcShowTab('${zname}','${k}',this)">${k}</button>`
         ).join("")}</div>`
       : "";
-
     const slotPanes = keys.map((k,i) => `
       <div id="zone-pane-${zname}-${k}" style="${i>0?'display:none':''}">
         <table class="slots-table">
@@ -684,7 +779,6 @@ function renderZoneCard(zname, zcfg) {
         </table>
         <button class="btn btn-secondary btn-sm" style="margin-top:6px" onclick="wcAddSlot('${zname}','${k}')">+ Slot</button>
       </div>`).join("");
-
     slotsHtml = tabBtns + slotPanes;
   }
 
@@ -747,61 +841,44 @@ function wcToggleZone(zname) {
   const body = document.getElementById(`zone-body-${zname}`);
   if (body) body.style.display = body.style.display === "none" ? "" : "none";
 }
-
 function wcShowTab(zname, key, btn) {
   const card = btn.closest(".zone-card");
   card.querySelectorAll(".tt-tab").forEach(b => b.classList.remove("active"));
   btn.classList.add("active");
-  const prefix = `zone-pane-${zname}-`;
-  card.querySelectorAll(`[id^="${prefix}"]`).forEach(p => p.style.display = "none");
+  card.querySelectorAll(`[id^="zone-pane-${zname}-"]`).forEach(p => p.style.display = "none");
   document.getElementById(`zone-pane-${zname}-${key}`).style.display = "";
 }
-
-function wcSetMeta(zname, field, value) {
-  state.wcData[zname][field] = value;
-}
-
+function wcSetMeta(zname, field, value) { state.wcData[zname][field] = value; }
 function wcSetTimetable(zname, value) {
   const zone = state.wcData[zname];
-  // Remove all old slot keys
   for (const k of ["Mon-Sun","Mon-Fri","Sat","Sun","Mon","Tue","Wed","Thu","Fri"]) delete zone[k];
   delete zone.timetable;
   if (value) {
     zone.timetable = value;
-    for (const k of (TT_KEYS[value] || [])) {
-      zone[k] = [{"start":"00:00","temp":16}];
-    }
+    for (const k of (TT_KEYS[value] || [])) zone[k] = [{"start":"00:00","temp":16}];
   }
   renderWcDetail();
 }
-
-function wcSetSlot(zname, key, idx, field, value) {
-  state.wcData[zname][key][idx][field] = value;
-}
-
+function wcSetSlot(zname, key, idx, field, value) { state.wcData[zname][key][idx][field] = value; }
 function wcAddSlot(zname, key) {
   state.wcData[zname][key].push({"start":"00:00","temp":16});
   renderWcDetail();
 }
-
 function wcDelSlot(zname, key, idx) {
   state.wcData[zname][key].splice(idx, 1);
   renderWcDetail();
 }
-
 function wcDelZone(zname) {
-  confirm("Delete zone", `Remove zone '${zname}' from this config?`, () => {
+  confirm("Delete zone", `Remove zone '${zname}'?`, () => {
     delete state.wcData[zname];
     renderWcDetail();
   });
 }
-
 function wcAddZone() {
   document.getElementById("wc-zone-name").value = "";
   document.getElementById("wc-zone-err").textContent = "";
   openModal("wc-add-zone");
 }
-
 function wcConfirmAddZone() {
   const name = document.getElementById("wc-zone-name").value.trim();
   if (!name) { document.getElementById("wc-zone-err").textContent = "Name required"; return; }
@@ -810,47 +887,85 @@ function wcConfirmAddZone() {
   closeModal("wc-add-zone");
   renderWcDetail();
 }
-
 function wcCopyZone() {
-  const srcSel  = document.getElementById("wc-cz-config");
-  const others  = Object.keys(state.wc).filter(n => n !== state.wcCurrent);
+  const others = Object.keys(state.wc).filter(n => n !== state.wcCurrent);
+  if (!others.length) { toast("No other config to copy from", "err"); return; }
+  const srcSel = document.getElementById("wc-cz-config");
   srcSel.innerHTML = others.map(n => `<option>${n}</option>`).join("");
   document.getElementById("wc-cz-dest").value = "";
   document.getElementById("wc-cz-err").textContent = "";
   wcCopyZoneConfigChanged();
   openModal("wc-copy-zone");
 }
-
 function wcCopyZoneConfigChanged() {
-  const src  = document.getElementById("wc-cz-config").value;
+  const src   = document.getElementById("wc-cz-config").value;
   const zones = state.wc[src] ? Object.keys(state.wc[src]) : [];
   document.getElementById("wc-cz-zone").innerHTML = zones.map(z => `<option>${z}</option>`).join("");
 }
-
 function wcConfirmCopyZone() {
-  const src   = document.getElementById("wc-cz-config").value;
-  const zone  = document.getElementById("wc-cz-zone").value;
-  const dest  = document.getElementById("wc-cz-dest").value.trim() || zone;
+  const src  = document.getElementById("wc-cz-config").value;
+  const zone = document.getElementById("wc-cz-zone").value;
+  const dest = document.getElementById("wc-cz-dest").value.trim() || zone;
+  const doCopy = () => {
+    state.wcData[dest] = JSON.parse(JSON.stringify(state.wc[src][zone]));
+    closeModal("wc-copy-zone");
+    renderWcDetail();
+  };
   if (state.wcData[dest]) {
-    confirm("Overwrite zone", `Zone '${dest}' already exists. Overwrite?`, () => {
-      state.wcData[dest] = JSON.parse(JSON.stringify(state.wc[src][zone]));
-      closeModal("wc-copy-zone");
-      renderWcDetail();
-    });
-    return;
+    confirm("Overwrite zone", `Zone '${dest}' already exists. Overwrite?`, doCopy);
+  } else {
+    doCopy();
   }
-  state.wcData[dest] = JSON.parse(JSON.stringify(state.wc[src][zone]));
-  closeModal("wc-copy-zone");
-  renderWcDetail();
 }
 
 async function wcSave() {
+  const nameEl = document.getElementById("wcDetailName");
+  const errEl  = document.getElementById("wcNameErr");
+  const name   = nameEl.value.trim();
+  errEl.textContent = "";
+  if (!name) { errEl.textContent = "Name required"; return; }
+
+  const isRename = !state.wcIsNew && state.wcCurrent && name !== state.wcCurrent;
+  const isNew    = state.wcIsNew;
+  const exists   = !!state.wc[name];
+
+  if ((isNew || isRename) && exists) {
+    // Ask confirmation to overwrite
+    confirm("Overwrite config", `'${name}' already exists. Overwrite?`, async () => {
+      await _wcDoSave(name, true);
+    });
+    return;
+  }
+  await _wcDoSave(name, false);
+}
+
+async function _wcDoSave(name, overwrite) {
+  const errEl = document.getElementById("wcNameErr");
   try {
-    const r = await api("POST", `/weekconfigs/${state.wcCurrent}?overwrite=true`, state.wcData);
-    state.wc[state.wcCurrent] = JSON.parse(JSON.stringify(state.wcData));
+    const oldName = state.wcCurrent;
+    // If rename: delete old, save new; if new/overwrite: just save
+    if (!state.wcIsNew && oldName && name !== oldName) {
+      // Save under new name then delete old
+      await api("POST", `/weekconfigs/${name}?overwrite=true`, state.wcData);
+      await api("DELETE", `/weekconfigs/${oldName}`);
+      // Update planning references
+      for (const p of state.pl) {
+        for (const ev of (p.events || [])) {
+          if (ev.config === oldName) ev.config = name;
+        }
+      }
+      delete state.wc[oldName];
+    } else {
+      await api("POST", `/weekconfigs/${name}?overwrite=true`, state.wcData);
+    }
+    state.wc[name]  = JSON.parse(JSON.stringify(state.wcData));
+    state.wcCurrent = name;
+    state.wcIsNew   = false;
+    state.wcName    = name;
     renderWcList();
+    renderWcDetail();
     toast("Saved", "ok");
-  } catch(e) { toast(e.message, "err"); }
+  } catch(e) { errEl.textContent = e.message; }
 }
 
 async function wcDelete() {
@@ -859,47 +974,14 @@ async function wcDelete() {
       await api("DELETE", `/weekconfigs/${state.wcCurrent}`);
       delete state.wc[state.wcCurrent];
       state.wcCurrent = null;
-      state.wcData = null;
+      state.wcIsNew   = false;
+      state.wcName    = null;
+      state.wcData    = null;
       renderWcList();
       renderWcDetail();
       toast("Deleted", "ok");
     } catch(e) { toast(e.message, "err"); }
   });
-}
-
-function wcRename() {
-  state.renameTarget = { type: "wc", name: state.wcCurrent };
-  document.getElementById("rename-title").textContent = `Rename '${state.wcCurrent}'`;
-  document.getElementById("rename-input").value = state.wcCurrent;
-  document.getElementById("rename-err").textContent = "";
-  openModal("rename");
-}
-
-async function wcCreateNew() {
-  const name = document.getElementById("wc-new-name").value.trim();
-  if (!name) { document.getElementById("wc-new-err").textContent = "Name required"; return; }
-  if (state.wc[name]) { document.getElementById("wc-new-err").textContent = "Already exists"; return; }
-  try {
-    await api("POST", `/weekconfigs/${name}`, {});
-    state.wc[name] = {};
-    closeModal("wc-new");
-    renderWcList();
-    selectWc(name);
-    toast("Created", "ok");
-  } catch(e) { document.getElementById("wc-new-err").textContent = e.message; }
-}
-
-async function wcCopyConfig() {
-  const src  = document.getElementById("wc-copy-src").value;
-  const name = document.getElementById("wc-copy-name").value.trim();
-  if (!name) { document.getElementById("wc-copy-err").textContent = "Name required"; return; }
-  try {
-    const r = await api("POST", `/weekconfigs/${src}/copy`, { newname: name });
-    closeModal("wc-copy-from");
-    await loadWeekconfigs();
-    selectWc(name);
-    toast("Copied", "ok");
-  } catch(e) { document.getElementById("wc-copy-err").textContent = e.message; }
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -910,37 +992,63 @@ async function loadPlannings() {
     const { data } = await api("GET", "/plannings");
     state.pl = data.plannings || [];
     renderPlList();
-    if (state.plCurrent) {
-      const found = state.pl.find(p => p.name === state.plCurrent);
-      if (found) selectPl(state.plCurrent);
-    }
+    if (state.plCurrent || state.plIsNew) renderPlDetail();
   } catch(e) { toast(e.message, "err"); }
 }
 
 function renderPlList() {
   const el = document.getElementById("plList");
-  if (!state.pl.length) {
-    el.innerHTML = `<div class="empty"><div class="empty-text">No plannings yet</div></div>`;
-    return;
-  }
-  el.innerHTML = state.pl.map(p => {
-    const isStd   = !p.start && !p.end;
-    const badge   = isStd
-      ? `<span class="badge badge-green">standard</span>`
-      : `<span class="badge badge-orange">exception</span>`;
-    const sub = isStd ? p.cycle : `${p.start||'…'} → ${p.end||'…'}`;
-    return `<div class="item-row ${p.name === state.plCurrent ? 'active' : ''}" onclick="selectPl('${p.name}')">
-      <div>
-        <div class="item-name">${p.name} ${badge}</div>
-        <div class="item-meta">${sub}</div>
-      </div>
+  let html = '';
+  if (state.plIsNew) {
+    html += `<div class="item-row active">
+      <div><div class="item-name" style="color:var(--accent)">${state.plData?.name || '(new)'} <span style="font-size:11px;color:var(--muted)">unsaved</span></div></div>
     </div>`;
-  }).join("");
+  }
+  if (!state.pl.length && !state.plIsNew) {
+    html += `<div class="empty"><div class="empty-text">No plannings yet</div></div>`;
+  } else {
+    html += state.pl.map(p => {
+      const isStd = !p.start && !p.end;
+      const badge = isStd
+        ? `<span class="badge badge-green">standard</span>`
+        : `<span class="badge badge-orange">exception</span>`;
+      const sub = isStd ? p.cycle : `${p.start||'…'} → ${p.end||'…'}`;
+      return `<div class="item-row ${!state.plIsNew && p.name === state.plCurrent ? 'active' : ''}"
+        onclick="selectPl('${p.name}')">
+        <div>
+          <div class="item-name">${p.name} ${badge}</div>
+          <div class="item-meta">${sub}</div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+  el.innerHTML = html;
+}
+
+function plNew() {
+  state.plCurrent = null;
+  state.plIsNew   = true;
+  state.plData    = { name: '', start: null, end: null, cycle: 'two-weeks-iso', events: [] };
+  renderPlList();
+  renderPlDetail();
+}
+
+function plCopyFrom() {
+  if (!state.pl.length) { toast("No plannings to copy from", "err"); return; }
+  const src = state.plCurrent ? state.pl.find(p => p.name === state.plCurrent) : state.pl[0];
+  state.plCurrent = null;
+  state.plIsNew   = true;
+  state.plData    = JSON.parse(JSON.stringify(src));
+  state.plData.name = '';
+  renderPlList();
+  renderPlDetail();
+  toast(`Copied from '${src.name}' — edit name and save`, '');
 }
 
 function selectPl(name) {
   state.plCurrent = name;
-  state.plData = JSON.parse(JSON.stringify(state.pl.find(p => p.name === name)));
+  state.plIsNew   = false;
+  state.plData    = JSON.parse(JSON.stringify(state.pl.find(p => p.name === name)));
   renderPlList();
   renderPlDetail();
 }
@@ -951,30 +1059,34 @@ function selectPl(name) {
 function renderPlDetail() {
   const header = document.getElementById("plDetailHeader");
   const body   = document.getElementById("plDetail");
-  if (!state.plCurrent) {
+  document.getElementById("plValidationBar").innerHTML = '';
+  if (!state.plIsNew && !state.plCurrent) {
     header.style.display = "none";
-    body.innerHTML = `<div class="empty"><div class="empty-icon">📅</div><div class="empty-text">Select a planning</div></div>`;
+    body.innerHTML = `<div class="empty"><div class="empty-icon">📅</div><div class="empty-text">Select a planning or create a new one</div></div>`;
     return;
   }
   header.style.display = "flex";
-  document.getElementById("plDetailName").textContent = state.plCurrent;
-  const p = state.plData;
+  const p     = state.plData;
   const cycle = p.cycle || "two-weeks-iso";
-  const isTwoWeeks = cycle !== "one-week";
+  const isTW  = cycle !== "one-week";
 
-  const eventsRows = (p.events || []).map((ev, i) => renderEventRow(ev, i, isTwoWeeks)).join("");
+  document.getElementById("plDetailName").value = p.name || '';
+  document.getElementById("plNameErr").textContent = '';
+  document.getElementById("plDeleteBtn").style.display = state.plIsNew ? "none" : "";
+
+  const eventsRows = (p.events || []).map((ev, i) => renderEventRow(ev, i, isTW)).join("");
 
   body.innerHTML = `
     <div class="form-row">
       <div class="form-group">
         <label class="form-label">Start <span style="font-weight:400;text-transform:none">(optional)</span></label>
-        <input class="form-input" id="pl-start" type="text" placeholder="YYYY-MM-DD HH:MM"
-          value="${p.start||''}" oninput="plSetField('start',this.value||null);plValidate()">
+        <input class="form-input" id="pl-start" placeholder="YYYY-MM-DD HH:MM"
+          value="${p.start||''}" oninput="plSetField('start',this.value||null)">
       </div>
       <div class="form-group">
         <label class="form-label">End <span style="font-weight:400;text-transform:none">(optional)</span></label>
-        <input class="form-input" id="pl-end" type="text" placeholder="YYYY-MM-DD HH:MM"
-          value="${p.end||''}" oninput="plSetField('end',this.value||null);plValidate()">
+        <input class="form-input" id="pl-end" placeholder="YYYY-MM-DD HH:MM"
+          value="${p.end||''}" oninput="plSetField('end',this.value||null)">
       </div>
     </div>
     <div class="form-row">
@@ -986,10 +1098,11 @@ function renderPlDetail() {
       </div>
       <div class="form-group" id="pl-refdate-group" ${cycle!=='two-weeks-seq'?'style="display:none"':''}>
         <label class="form-label">Reference date</label>
-        <input class="form-input" id="pl-refdate" type="text" placeholder="YYYY-MM-DD"
+        <input class="form-input" id="pl-refdate" placeholder="YYYY-MM-DD"
           value="${p.ref_date||''}" oninput="plSetField('ref_date',this.value||null)">
       </div>
     </div>
+    <div class="form-hint" style="margin-bottom:12px">Leave start and end empty for the standard planning (always active, lowest priority).</div>
     <div class="divider"></div>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
       <span style="font-weight:600;font-size:13px">Events</span>
@@ -998,7 +1111,7 @@ function renderPlDetail() {
     <table class="events-table" id="pl-events-table">
       <tr>
         <th>Level</th><th>Day</th><th>Time</th>
-        ${isTwoWeeks ? '<th>Week</th>' : ''}
+        ${isTW ? '<th>Week</th>' : ''}
         <th>Config</th><th></th>
       </tr>
       ${eventsRows}
@@ -1007,7 +1120,12 @@ function renderPlDetail() {
 
 function renderEventRow(ev, i, isTwoWeeks) {
   const configs = Object.keys(state.wc);
-  return `<tr id="ev-row-${i}">
+  const configSelect = configs.length
+    ? `<select onchange="plSetEv(${i},'config',this.value)">
+        ${configs.map(c => `<option${c===ev.config?' selected':''}>${c}</option>`).join("")}
+       </select>`
+    : `<span style="color:var(--red);font-size:12px">No weekconfigs — create one first</span>`;
+  return `<tr>
     <td>
       <select onchange="plSetEv(${i},'level',+this.value)">
         <option${ev.level===1?' selected':''} value="1">L1</option>
@@ -1016,7 +1134,7 @@ function renderEventRow(ev, i, isTwoWeeks) {
     </td>
     <td>
       <select onchange="plSetEv(${i},'day',this.value)">
-        ${DAYS.map((d,di) => `<option${d===ev.day?' selected':''}>${d}</option>`).join("")}
+        ${DAYS.map(d => `<option${d===ev.day?' selected':''}>${d}</option>`).join("")}
       </select>
     </td>
     <td><input style="width:72px;font-family:var(--mono)" value="${ev.time||'00:00'}"
@@ -1026,11 +1144,7 @@ function renderEventRow(ev, i, isTwoWeeks) {
         ${["odd","even","both"].map(w => `<option${(ev.week||'both')===w?' selected':''}>${w}</option>`).join("")}
       </select>
     </td>` : ''}
-    <td>
-      <select onchange="plSetEv(${i},'config',this.value)">
-        ${configs.map(c => `<option${c===ev.config?' selected':''}>${c}</option>`).join("")}
-      </select>
-    </td>
+    <td>${configSelect}</td>
     <td><button class="slot-del" onclick="plDelEvent(${i})">✕</button></td>
   </tr>`;
 }
@@ -1038,61 +1152,75 @@ function renderEventRow(ev, i, isTwoWeeks) {
 function plSetField(field, value) {
   state.plData[field] = value;
 }
-
 function plSetCycle(value) {
   state.plData.cycle = value;
-  const isTW = value !== "one-week";
-  document.getElementById("pl-refdate-group").style.display = isTW && value === "two-weeks-seq" ? "" : "none";
-  // Re-render events table to show/hide week column
+  document.getElementById("pl-refdate-group").style.display =
+    value === "two-weeks-seq" ? "" : "none";
   renderPlDetail();
 }
-
-function plSetEv(i, field, value) {
-  state.plData.events[i][field] = value;
-}
-
+function plSetEv(i, field, value) { state.plData.events[i][field] = value; }
 function plAddEvent() {
   const configs = Object.keys(state.wc);
   state.plData.events = state.plData.events || [];
-  state.plData.events.push({
-    level: 1, day: "monday", time: "00:00",
-    week: "both",
-    config: configs[0] || ""
-  });
+  state.plData.events.push({ level:1, day:"monday", time:"00:00", week:"both", config: configs[0] || null });
   renderPlDetail();
 }
-
 function plDelEvent(i) {
   state.plData.events.splice(i, 1);
   renderPlDetail();
 }
 
-async function plValidate() {
-  if (!state.plData) return;
-  const payload = { ...state.plData, _exclude_name: state.plCurrent };
-  try {
-    const { data } = await api("POST", "/plannings/validate", payload);
-    const bar = document.getElementById("plValidationBar");
-    if (data.valid) {
-      bar.innerHTML = "";
-    } else {
-      bar.innerHTML = `<div class="alert alert-error" style="margin:8px 20px 0;font-size:12px">
-        ${data.errors.map(e => `• ${e}`).join("<br>")}
-      </div>`;
-    }
-  } catch(e) {}
+async function plSave() {
+  const nameEl = document.getElementById("plDetailName");
+  const errEl  = document.getElementById("plNameErr");
+  const name   = nameEl.value.trim();
+  errEl.textContent = "";
+  if (!name) { errEl.textContent = "Name required"; return; }
+
+  state.plData.name = name;
+  const oldName  = state.plCurrent;
+  const isRename = !state.plIsNew && oldName && name !== oldName;
+  const isNew    = state.plIsNew;
+  const exists   = state.pl.some(p => p.name === name);
+
+  if ((isNew || isRename) && exists) {
+    confirm("Overwrite planning", `'${name}' already exists. Overwrite?`, async () => {
+      await _plDoSave(name, oldName, true);
+    });
+    return;
+  }
+  await _plDoSave(name, oldName, false);
 }
 
-async function plSave() {
+async function _plDoSave(name, oldName, overwrite) {
+  const errEl = document.getElementById("plNameErr");
+  const bar   = document.getElementById("plValidationBar");
   try {
-    const r = await api("POST", `/plannings/${state.plCurrent}?overwrite=true`, state.plData);
-    if (!r.ok && !r.data.exists) throw new Error(r.data.error);
-    if (r.status === 422) { toast(r.data.error, "err"); return; }
-    const idx = state.pl.findIndex(p => p.name === state.plCurrent);
-    if (idx >= 0) state.pl[idx] = JSON.parse(JSON.stringify(state.plData));
+    state.plData.name = name;
+    const r = await api("POST", `/plannings/${name}?overwrite=true`, state.plData);
+    if (r.status === 422) {
+      const errors = r.data.error ? r.data.error.split("; ") : [];
+      bar.innerHTML = `<div class="alert alert-error" style="margin:8px 20px 0;font-size:12px">
+        ${errors.map(e => `• ${e}`).join("<br>")}
+      </div>`;
+      return;
+    }
+    // If rename: delete old
+    if (!state.plIsNew && oldName && name !== oldName) {
+      await api("DELETE", `/plannings/${oldName}`);
+      state.pl = state.pl.filter(p => p.name !== oldName);
+    }
+    const idx = state.pl.findIndex(p => p.name === name);
+    const saved = JSON.parse(JSON.stringify(state.plData));
+    if (idx >= 0) state.pl[idx] = saved;
+    else state.pl.push(saved);
+    state.plCurrent = name;
+    state.plIsNew   = false;
+    bar.innerHTML   = '';
     renderPlList();
+    renderPlDetail();
     toast("Saved", "ok");
-  } catch(e) { toast(e.message, "err"); }
+  } catch(e) { errEl.textContent = e.message; }
 }
 
 async function plDelete() {
@@ -1101,7 +1229,8 @@ async function plDelete() {
       await api("DELETE", `/plannings/${state.plCurrent}`);
       state.pl = state.pl.filter(p => p.name !== state.plCurrent);
       state.plCurrent = null;
-      state.plData = null;
+      state.plIsNew   = false;
+      state.plData    = null;
       renderPlList();
       renderPlDetail();
       toast("Deleted", "ok");
@@ -1109,103 +1238,12 @@ async function plDelete() {
   });
 }
 
-function plRename() {
-  state.renameTarget = { type: "pl", name: state.plCurrent };
-  document.getElementById("rename-title").textContent = `Rename '${state.plCurrent}'`;
-  document.getElementById("rename-input").value = state.plCurrent;
-  document.getElementById("rename-err").textContent = "";
-  openModal("rename");
-}
-
-async function plCreateNew() {
-  const name = document.getElementById("pl-new-name").value.trim();
-  if (!name) { document.getElementById("pl-new-err").textContent = "Name required"; return; }
-  if (state.pl.find(p => p.name === name)) {
-    document.getElementById("pl-new-err").textContent = "Already exists"; return;
-  }
-  const newPl = { name, start: null, end: null, cycle: "two-weeks-iso", events: [] };
-  try {
-    await api("POST", `/plannings/${name}`, newPl);
-    state.pl.push(newPl);
-    closeModal("pl-new");
-    state.plCurrent = name;
-    state.plData = JSON.parse(JSON.stringify(newPl));
-    renderPlList();
-    renderPlDetail();
-    toast("Created", "ok");
-  } catch(e) { document.getElementById("pl-new-err").textContent = e.message; }
-}
-
-async function plCopyPlanning() {
-  const src  = document.getElementById("pl-copy-src").value;
-  const name = document.getElementById("pl-copy-name").value.trim();
-  if (!name) { document.getElementById("pl-copy-err").textContent = "Name required"; return; }
-  try {
-    await api("POST", `/plannings/${src}/copy`, { newname: name });
-    closeModal("pl-copy-from");
-    await loadPlannings();
-    selectPl(name);
-    toast("Copied", "ok");
-  } catch(e) { document.getElementById("pl-copy-err").textContent = e.message; }
-}
+async function plValidate() { /* called inline if needed */ }
 
 // ─────────────────────────────────────────────────────────────────────────
-// SHARED RENAME
+// MODAL OPEN HELPERS
 // ─────────────────────────────────────────────────────────────────────────
-async function confirmRename() {
-  const newname = document.getElementById("rename-input").value.trim();
-  if (!newname) { document.getElementById("rename-err").textContent = "Name required"; return; }
-  const { type, name } = state.renameTarget;
-  try {
-    if (type === "wc") {
-      await api("POST", `/weekconfigs/${name}/rename`, { newname });
-      const val = state.wc[name];
-      delete state.wc[name];
-      state.wc[newname] = val;
-      if (state.wcCurrent === name) state.wcCurrent = newname;
-      renderWcList();
-      renderWcDetail();
-    } else {
-      await api("POST", `/plannings/${name}/rename`, { newname });
-      const p = state.pl.find(p => p.name === name);
-      if (p) p.name = newname;
-      if (state.plCurrent === name) {
-        state.plCurrent = newname;
-        if (state.plData) state.plData.name = newname;
-      }
-      renderPlList();
-      renderPlDetail();
-    }
-    closeModal("rename");
-    toast("Renamed", "ok");
-  } catch(e) { document.getElementById("rename-err").textContent = e.message; }
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// MODAL OPEN HELPERS (populate dropdowns)
-// ─────────────────────────────────────────────────────────────────────────
-const _origOpenModal = openModal;
 function openModal(id) {
-  if (id === "wc-copy-from") {
-    document.getElementById("wc-copy-src").innerHTML =
-      Object.keys(state.wc).map(n => `<option>${n}</option>`).join("");
-    document.getElementById("wc-copy-name").value = "";
-    document.getElementById("wc-copy-err").textContent = "";
-  }
-  if (id === "pl-copy-from") {
-    document.getElementById("pl-copy-src").innerHTML =
-      state.pl.map(p => `<option>${p.name}</option>`).join("");
-    document.getElementById("pl-copy-name").value = "";
-    document.getElementById("pl-copy-err").textContent = "";
-  }
-  if (id === "wc-new") {
-    document.getElementById("wc-new-name").value = "";
-    document.getElementById("wc-new-err").textContent = "";
-  }
-  if (id === "pl-new") {
-    document.getElementById("pl-new-name").value = "";
-    document.getElementById("pl-new-err").textContent = "";
-  }
   document.getElementById("modal-" + id).classList.add("open");
 }
 
@@ -1217,9 +1255,16 @@ document.querySelectorAll(".modal-overlay").forEach(el => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────
-// INIT
+// INIT — preload weekconfigs so config selects work in plannings
 // ─────────────────────────────────────────────────────────────────────────
-loadStatus();
+(async () => {
+  try {
+    const { data } = await api("GET", "/weekconfigs");
+    state.wc = data.weekconfigs || {};
+  } catch(e) {}
+  loadStatus();
+})();
+
 </script>
 </body>
 </html>
