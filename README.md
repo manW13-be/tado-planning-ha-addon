@@ -146,10 +146,8 @@ tado-planning/
 │   ├── vacancewithkids.json      # Level 1 weekconfig — school holidays
 │   ├── away_15deg.json           # Level 2 weekconfig — away mode at 15°C
 │   └── away_18deg.json           # Level 2 weekconfig — away mode at 18°C
-├── schedules.tmpl/               # Template files — copied to schedules/ on first run
 ├── logs/                         # Log files (gitignored)
 └── scripts/
-    ├── init_schedules.sh         # Init schedules/ from schedules.tmpl/
     ├── list_zones.sh             # List Tado zones (Mac + HA SSH)
     ├── fetch.sh                  # Pull from GitHub (Mac + HA SSH)
     ├── push.sh                   # Commit + push to GitHub (Mac + HA SSH)
@@ -189,16 +187,15 @@ tado-planning runs on **Home Assistant** (as an add-on) or on **macOS** (via lau
 4. Click **tado-planning → Install** — the Docker image builds on your device (3–5 min on ODROID N2+)
 5. Do **not** start the add-on yet
 
-### Step 2 — Initialize your schedule files
+### Step 2 — Create your schedule directory
 
-Connect via SSH and run:
+The schedules directory is created automatically on first run. You can also create it manually:
 
 ```bash
-cd /root/tado-planning
-./scripts/init_schedules.sh
+mkdir -p /config/tado-planning/schedules
 ```
 
-This copies `schedules.tmpl/` to `/config/tado-planning/schedules/` if it doesn't exist yet. The files are then accessible via Samba at `smb://homeassistant.local/config/tado-planning/schedules/`.
+The files are then accessible via Samba at `smb://homeassistant.local/config/tado-planning/schedules/`.
 
 ### Step 3 — List your Tado zones
 
@@ -253,13 +250,13 @@ git clone https://github.com/manW13-be/tado-planning-ha-addon.git tado-planning
 cd tado-planning
 ```
 
-### Step 2 — Initialize your schedule files
+### Step 2 — Create your schedule directory
+
+The `schedules/` directory is created automatically on first run. You can also create it manually:
 
 ```bash
-./scripts/init_schedules.sh
+mkdir -p schedules
 ```
-
-Copies `schedules.tmpl/` to `schedules/` if it doesn't exist yet.
 
 ### Step 3 — List your Tado zones
 
@@ -557,10 +554,6 @@ Cleans old images, rebuilds with `--no-cache` (required due to HAOS overlay file
 
 Use this after `fetch.sh` when you want HA to pick up changes immediately without waiting for the store to detect the new version.
 
-#### `scripts/init_schedules.sh`
-
-Copies `schedules.tmpl/` → `schedules/` if absent or empty. Asks confirmation if `schedules/` already exists. Use `--force` to overwrite without asking. Universal (Mac + HA SSH).
-
 #### `scripts/list_zones.sh`
 
 Lists all Tado zones with their names, IDs, and types. Authenticates if needed. On HA SSH, executes inside the container automatically. Universal (Mac + HA SSH).
@@ -633,8 +626,7 @@ The version is used by the HA store to detect available updates. A bump is only 
 2. Reference it in `planning_standard.json` with `"config": "myconfig"`
 3. For a level 2 config, only define the zones you want to override
 4. Test: `./run.sh -c myconfig.json` or `./run.sh -d YYYY-MM-DD -vvv`
-5. If it belongs in the template, add it to `schedules.tmpl/` as well
-6. Push and deploy
+5. Push and deploy
 
 ---
 
