@@ -49,6 +49,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text);
 .main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
 .section { display: none; flex: 1; flex-direction: column; }
 .section.active { display: flex; }
+#sec-logs { height: 100%; }
 .section-header { padding: 24px 28px 16px; border-bottom: 1px solid var(--border);
                   background: var(--surface); display: flex; align-items: center;
                   justify-content: space-between; gap: 12px; flex-shrink: 0; }
@@ -220,6 +221,44 @@ body { font-family: var(--font); background: var(--bg); color: var(--text);
 .badge-green  { background: #dcfce7; color: var(--green); }
 .badge-orange { background: #fef3c7; color: var(--orange); }
 
+
+/* ── DATE-TIME PICKER ── */
+.dtp-wrap { position: relative; }
+.dtp-row { display: flex; gap: 6px; align-items: center; }
+.dtp-date-btn { flex: 1; padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px;
+                font-size: 13.5px; background: var(--surface); color: var(--text);
+                cursor: pointer; text-align: left; transition: border-color .15s; white-space: nowrap; }
+.dtp-date-btn:hover { border-color: var(--accent); }
+.dtp-date-btn.has-val { font-weight: 500; }
+.dtp-time { width: 72px; padding: 7px 8px; border: 1px solid var(--border); border-radius: 6px;
+            font-size: 13.5px; font-family: var(--mono); background: var(--surface);
+            color: var(--text); transition: border-color .15s; }
+.dtp-time:focus { outline: none; border-color: var(--accent); }
+.dtp-clear { padding: 6px 8px; background: none; border: 1px solid var(--border);
+             border-radius: 6px; cursor: pointer; color: var(--muted); font-size: 13px;
+             line-height: 1; transition: background .12s; }
+.dtp-clear:hover { background: #fee2e2; color: var(--red); border-color: #fca5a5; }
+.dtp-cal { position: absolute; z-index: 50; top: calc(100% + 4px); left: 0;
+           background: var(--surface); border: 1px solid var(--border);
+           border-radius: var(--radius); box-shadow: 0 4px 16px rgba(0,0,0,.12);
+           padding: 10px; min-width: 220px; display: none; }
+.dtp-cal.open { display: block; }
+.dtp-cal-nav { display: flex; align-items: center; justify-content: space-between;
+               margin-bottom: 8px; }
+.dtp-cal-nav button { background: none; border: none; cursor: pointer; padding: 3px 7px;
+                      border-radius: 4px; font-size: 14px; color: var(--text); }
+.dtp-cal-nav button:hover { background: var(--bg); }
+.dtp-cal-title { font-size: 13px; font-weight: 600; }
+.dtp-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.dtp-cal-dow { font-size: 10px; font-weight: 600; color: var(--muted); text-align: center;
+               text-transform: uppercase; padding: 2px 0 4px; }
+.dtp-cal-day { font-size: 12px; text-align: center; padding: 4px 2px; border-radius: 4px;
+               cursor: pointer; border: none; background: none; color: var(--text); }
+.dtp-cal-day:hover { background: var(--bg); }
+.dtp-cal-day.today { font-weight: 700; color: var(--accent); }
+.dtp-cal-day.selected { background: var(--accent); color: #fff; font-weight: 600; }
+.dtp-cal-day.other-month { color: #ccc; }
+.dtp-cal-day:disabled { color: #ddd; cursor: default; }
 /* ── DIVIDER ── */
 .divider { height: 1px; background: var(--border); margin: 16px 0; }
 
@@ -273,6 +312,21 @@ body { font-family: var(--font); background: var(--bg); color: var(--text);
       <path d="M5 2v12M2 6h3M2 10h3"/>
     </svg>
     Plannings
+  </div>
+  <div class="nav-section">System</div>
+  <div class="nav-item" data-section="settings" onclick="showSection('settings')">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+      <circle cx="8" cy="8" r="2.5"/>
+      <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/>
+    </svg>
+    Settings
+  </div>
+  <div class="nav-item" data-section="logs" onclick="showSection('logs')">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+      <rect x="2" y="2" width="12" height="12" rx="1"/>
+      <path d="M5 5h6M5 8h6M5 11h4"/>
+    </svg>
+    Logs
   </div>
 </nav>
 
@@ -369,6 +423,74 @@ body { font-family: var(--font); background: var(--bg); color: var(--text);
     </div>
   </section>
 
+  <!-- ── SETTINGS ── -->
+  <section class="section" id="sec-settings">
+    <div class="section-header">
+      <h1>Settings</h1>
+      <button class="btn btn-primary btn-sm" onclick="settingsSave()">Save</button>
+    </div>
+    <div class="section-body" style="max-width:520px">
+
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-header"><span class="card-title">Scheduler loop</span></div>
+        <div class="card-body">
+          <div class="form-group">
+            <label class="form-label">Loop interval (minutes)</label>
+            <input class="form-input" type="number" min="1" id="set-loop-interval"
+              style="max-width:120px" placeholder="60">
+            <div class="form-hint">How often the scheduler runs in <code>--loop</code> mode.
+              Applies on the next cycle without restarting the container.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Default zone template</span>
+          <button class="btn btn-secondary btn-sm" onclick="settingsDzClear()">Clear</button>
+        </div>
+        <div class="card-body">
+          <div class="form-hint" style="margin-bottom:12px">
+            When adding a new zone to a weekconfig, this template is used as the starting
+            configuration instead of the bare minimum defaults.
+          </div>
+          <div id="set-dz-editor"></div>
+          <div id="set-settings-err" style="color:var(--red);font-size:12px;margin-top:8px"></div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ── LOGS ── -->
+  <section class="section" id="sec-logs">
+    <div class="section-header">
+      <h1>Logs</h1>
+      <div style="display:flex;gap:8px;align-items:center">
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+          <input type="checkbox" id="log-autoscroll" checked>
+          Auto-scroll
+        </label>
+        <select class="form-select" id="log-lines" onchange="loadLogs()"
+          style="width:auto;padding:5px 8px;font-size:12px">
+          <option value="100">100 lines</option>
+          <option value="200" selected>200 lines</option>
+          <option value="500">500 lines</option>
+          <option value="1000">1000 lines</option>
+        </select>
+        <button class="btn btn-secondary btn-sm" onclick="loadLogs()">↻ Refresh</button>
+        <button class="btn btn-danger btn-sm" onclick="clearLogs()">Clear</button>
+      </div>
+    </div>
+    <div class="section-body" style="padding:0;display:flex;flex-direction:column;flex:1;min-height:0">
+      <div id="log-meta" style="padding:8px 20px;font-size:11px;color:var(--muted);
+        border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0"></div>
+      <pre id="log-output" style="flex:1;overflow-y:auto;margin:0;padding:14px 20px;
+        font-family:var(--mono);font-size:12px;line-height:1.6;background:#1a1d23;
+        color:#e2e4e9;white-space:pre-wrap;word-break:break-all;min-height:0"></pre>
+    </div>
+  </section>
+
 </main>
 
 <!-- TOAST -->
@@ -379,9 +501,10 @@ body { font-family: var(--font); background: var(--bg); color: var(--text);
   <div class="modal">
     <div class="modal-title">Add zone</div>
     <div class="form-group">
-      <label class="form-label">Zone name (Tado internal name)</label>
-      <input class="form-input" id="wc-zone-name" placeholder="e.g. salon_tv">
-      <div class="form-hint">Use underscores, lowercase. Must match your Tado zone name.</div>
+      <label class="form-label">Zone</label>
+      <select class="form-select" id="wc-zone-name">
+        <option value="">Loading zones...</option>
+      </select>
       <div class="form-error" id="wc-zone-err"></div>
     </div>
     <div class="modal-actions">
@@ -403,8 +526,10 @@ body { font-family: var(--font); background: var(--bg); color: var(--text);
       <select class="form-select" id="wc-cz-zone"></select>
     </div>
     <div class="form-group">
-      <label class="form-label">Destination zone name</label>
-      <input class="form-input" id="wc-cz-dest" placeholder="leave empty to keep same name">
+      <label class="form-label">Destination zone</label>
+      <select class="form-select" id="wc-cz-dest">
+        <option value="">Loading zones...</option>
+      </select>
     </div>
     <div class="form-error" id="wc-cz-err"></div>
     <div class="modal-actions">
@@ -494,6 +619,9 @@ function showSection(id) {
   if (id === "status")      loadStatus();
   if (id === "weekconfigs") loadWeekconfigs();
   if (id === "plannings")   loadPlannings();
+  if (id === "settings")    loadSettings();
+  if (id === "logs")        { loadLogs(); _startLogsAutoRefresh(); }
+  if (id !== "logs")        _stopLogsAutoRefresh();
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -519,16 +647,41 @@ async function loadStatus() {
   const el = document.getElementById("statusBody");
   el.innerHTML = `<div class="empty"><div class="empty-icon">⏳</div><div class="empty-text">Loading...</div></div>`;
   try {
-    const [statusRes, tlRes] = await Promise.all([
+    const [statusRes, tlRes, loopRes] = await Promise.allSettled([
       api("GET", "/status"),
-      api("GET", "/timeline")
+      api("GET", "/timeline"),
+      api("GET", "/loop-status")
     ]);
-    const d  = statusRes.data;
-    const tl = tlRes.data;
+    // Extract data tolerantly — a failed call gives empty/default
+    const d    = statusRes.status === 'fulfilled' ? statusRes.value.data : {error: statusRes.reason?.message || 'status error'};
+    const tl   = tlRes.status    === 'fulfilled' ? tlRes.value.data    : {error: tlRes.reason?.message    || 'timeline error'};
+    const loop = loopRes.status  === 'fulfilled' ? loopRes.value.data  : {running: false};
     if (d.error) { el.innerHTML = `<div class="alert alert-error">${d.error}</div>`; return; }
     if (tl.error) { el.innerHTML = `<div class="alert alert-error">${tl.error}</div>`; return; }
 
     let html = '';
+
+    // ── Loop status bar ──
+    {
+      const dot = loop.running
+        ? `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;
+            background:var(--green);box-shadow:0 0 0 2px rgba(22,163,74,.2);flex-shrink:0"></span>`
+        : `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;
+            background:var(--muted);flex-shrink:0"></span>`;
+      const info = loop.running
+        ? `<span style="font-size:13px;font-weight:600;">Loop running</span>
+           <span style="font-size:12px;color:var(--muted);">every ${loop.interval_min} min</span>
+           ${loop.last_run ? `<span style="font-size:12px;color:var(--muted);">· last <b>${loop.last_run}</b></span>` : ''}
+           ${loop.next_run ? `<span style="font-size:12px;color:var(--muted);">· next <b>${loop.next_run}</b></span>` : ''}`
+        : `<span style="font-size:13px;color:var(--muted);">Loop not running</span>`;
+      html += `<div style="display:flex;align-items:center;justify-content:space-between;
+        border:1px solid var(--border);border-radius:var(--radius);padding:10px 16px;
+        margin-bottom:1rem;background:var(--surface);">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">${dot}${info}</div>
+        <button class="btn btn-secondary btn-sm" style="flex-shrink:0;margin-left:12px"
+          onclick="runNow(this)">▶ Run now</button>
+      </div>`;
+    }
 
     // ── Planning cards ──
     html += `<div style="font-size:12px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;">Plannings</div>`;
@@ -614,17 +767,26 @@ async function loadStatus() {
           r += `<td rowspan="${rowspan}" style="padding:8px;font-weight:500;font-size:13px;vertical-align:middle;border-right:0.5px solid var(--border);${zBorder}">${zone}</td>`;
         }
         r += `<td style="text-align:center;padding:4px;font-size:11px;font-weight:500;color:${lvlColor};border-right:0.5px solid var(--border);border-bottom:0.5px solid var(--border);">${lvl}</td>`;
+        let currentCell = null;
         row.forEach((cell, ci) => {
-          const isExc = cell && cell.planning !== (d.plannings.find(p => !p.start && !p.end) || {}).name;
-          const bg = cell && isExc ? 'background:var(--color-background-info,#eff6ff);' : '';
-          const nameColor = cell && isExc ? 'color:var(--accent);' : 'color:var(--text);';
           const bdBottom = `border-bottom:0.5px solid var(--border);`;
-          if (!cell) {
-            r += `<td style="padding:6px 8px;font-size:12px;color:var(--muted);${bdBottom}">—</td>`;
+          if (cell) currentCell = cell;
+          const displayCell = cell || currentCell;
+          if (!displayCell) {
+            r += `<td style="padding:6px 8px;font-size:12px;color:var(--muted);${bdBottom}"></td>`;
           } else {
+            const changed = !!cell;
+            const isExc = displayCell.planning !== (d.plannings.find(p => !p.start && !p.end) || {}).name;
+            const bgChanged = lvl === 'L1' ? 'background:rgba(37,99,235,0.10);' : 'background:rgba(124,58,237,0.10);';
+            const bg = changed ? (isExc ? 'background:rgba(37,99,235,0.18);' : bgChanged) : '';
+            const nameWeight = changed ? 'font-weight:600;' : 'font-weight:400;';
+            const nameColor = changed
+              ? (isExc ? 'color:var(--accent);' : (lvl === 'L1' ? 'color:var(--l1);' : 'color:var(--l2);'))
+              : 'color:var(--muted);';
+            const planColor = changed ? 'color:var(--muted);' : 'color:#c4c8d0;';
             r += `<td style="padding:6px 8px;${bg}${bdBottom}">
-              <div style="font-size:12px;font-weight:500;${nameColor}">${cell.config}</div>
-              <div style="font-size:10px;color:var(--muted);">${cell.planning}</div>
+              <div style="font-size:12px;${nameWeight}${nameColor}">${displayCell.config}</div>
+              <div style="font-size:10px;${planColor}">${displayCell.planning}</div>
             </td>`;
           }
         });
@@ -645,7 +807,7 @@ async function loadStatus() {
     html += `<div style="font-size:11px;color:var(--muted);margin-top:10px;display:flex;gap:16px;flex-wrap:wrap;">
       <span><span style="display:inline-block;width:10px;height:10px;background:var(--color-background-info,#eff6ff);border-radius:2px;margin-right:4px;"></span>exception planning</span>
       <span>no background = standard planning</span>
-      <span>— = no change at this moment</span>
+      <span><b>bold</b> = change at this moment · normal = unchanged (carrying previous value)</span>
     </div>`;
 
     el.innerHTML = html;
@@ -855,7 +1017,7 @@ function wcSetTimetable(zname, value) {
   delete zone.timetable;
   if (value) {
     zone.timetable = value;
-    for (const k of (TT_KEYS[value] || [])) zone[k] = [{"start":"00:00","temp":16}];
+    for (const k of (TT_KEYS[value] || [])) zone[k] = [];
   }
   renderWcDetail();
 }
@@ -874,28 +1036,65 @@ function wcDelZone(zname) {
     renderWcDetail();
   });
 }
-function wcAddZone() {
-  document.getElementById("wc-zone-name").value = "";
-  document.getElementById("wc-zone-err").textContent = "";
+async function wcAddZone() {
+  const sel = document.getElementById("wc-zone-name");
+  const err = document.getElementById("wc-zone-err");
+  err.textContent = "";
+  sel.innerHTML = `<option value="">Loading...</option>`;
   openModal("wc-add-zone");
+  try {
+    const { data } = await api("GET", "/zones");
+    const existing = new Set(Object.keys(state.wcData || {}));
+    const missing = (data.zones || [])
+      .map(z => z.name.toLowerCase().replace(/\s+/g, "_"))
+      .filter(n => !existing.has(n))
+      .sort();
+    if (!missing.length) {
+      sel.innerHTML = `<option value="">All Tado zones already added</option>`;
+    } else {
+      sel.innerHTML = missing.map(n => `<option value="${n}">${n}</option>`).join("");
+    }
+  } catch(e) {
+    sel.innerHTML = `<option value="">Could not load zones</option>`;
+  }
 }
 function wcConfirmAddZone() {
   const name = document.getElementById("wc-zone-name").value.trim();
-  if (!name) { document.getElementById("wc-zone-err").textContent = "Name required"; return; }
-  if (state.wcData[name]) { document.getElementById("wc-zone-err").textContent = "Zone already exists"; return; }
-  state.wcData[name] = { away_temp: 15, away_enabled: true };
+  const err  = document.getElementById("wc-zone-err");
+  if (!name) { err.textContent = "Select a zone"; return; }
+  if (state.wcData[name]) { err.textContent = "Zone already exists"; return; }
+  // Use default_zone template if configured and available
+  const tpl = _dzData ? JSON.parse(JSON.stringify(_dzData)) : null;
+  state.wcData[name] = tpl || { away_temp: 15, away_enabled: true };
   closeModal("wc-add-zone");
   renderWcDetail();
 }
-function wcCopyZone() {
+async function wcCopyZone() {
   const others = Object.keys(state.wc).filter(n => n !== state.wcCurrent);
   if (!others.length) { toast("No other config to copy from", "err"); return; }
-  const srcSel = document.getElementById("wc-cz-config");
-  srcSel.innerHTML = others.map(n => `<option>${n}</option>`).join("");
-  document.getElementById("wc-cz-dest").value = "";
+  const srcSel  = document.getElementById("wc-cz-config");
+  const destSel = document.getElementById("wc-cz-dest");
+  srcSel.innerHTML  = others.map(n => `<option>${n}</option>`).join("");
+  destSel.innerHTML = `<option value="">Loading...</option>`;
   document.getElementById("wc-cz-err").textContent = "";
   wcCopyZoneConfigChanged();
   openModal("wc-copy-zone");
+  try {
+    const { data } = await api("GET", "/zones");
+    const existing = new Set(Object.keys(state.wcData || {}));
+    const missing = (data.zones || [])
+      .map(z => z.name.toLowerCase().replace(/\s+/g, "_"))
+      .filter(n => !existing.has(n))
+      .sort();
+    if (!missing.length) {
+      destSel.innerHTML = `<option value="">All Tado zones already present</option>`;
+    } else {
+      destSel.innerHTML = `<option value="">— same as source —</option>` +
+        missing.map(n => `<option value="${n}">${n}</option>`).join("");
+    }
+  } catch(e) {
+    destSel.innerHTML = `<option value="">Could not load zones</option>`;
+  }
 }
 function wcCopyZoneConfigChanged() {
   const src   = document.getElementById("wc-cz-config").value;
@@ -1080,13 +1279,11 @@ function renderPlDetail() {
     <div class="form-row">
       <div class="form-group">
         <label class="form-label">Start <span style="font-weight:400;text-transform:none">(optional)</span></label>
-        <input class="form-input" id="pl-start" placeholder="YYYY-MM-DD HH:MM"
-          value="${p.start||''}" oninput="plSetField('start',this.value||null)">
+        ${dtpHtml('pl-start', p.start)}
       </div>
       <div class="form-group">
         <label class="form-label">End <span style="font-weight:400;text-transform:none">(optional)</span></label>
-        <input class="form-input" id="pl-end" placeholder="YYYY-MM-DD HH:MM"
-          value="${p.end||''}" oninput="plSetField('end',this.value||null)">
+        ${dtpHtml('pl-end', p.end)}
       </div>
     </div>
     <div class="form-row">
@@ -1148,6 +1345,164 @@ function renderEventRow(ev, i, isTwoWeeks) {
     <td><button class="slot-del" onclick="plDelEvent(${i})">✕</button></td>
   </tr>`;
 }
+
+// ── Date-time picker helpers ───────────────────────────────────────────────
+// Parse "YYYY-MM-DD HH:MM" → {date:"YYYY-MM-DD", time:"HH:MM"} or nulls
+function dtpParse(val) {
+  if (!val) return { date: null, time: "00:00" };
+  const m = val.match(/^(\d{4}-\d{2}-\d{2})(?:\s+(\d{2}:\d{2}))?$/);
+  return m ? { date: m[1], time: m[2] || "00:00" } : { date: null, time: "00:00" };
+}
+// Compose back to "YYYY-MM-DD HH:MM" or null
+function dtpCompose(date, time) {
+  if (!date) return null;
+  return date + " " + (time || "00:00");
+}
+// Build the widget HTML for a given field id and current value
+function dtpHtml(id, val) {
+  const { date, time } = dtpParse(val);
+  const label = date ? date : "Pick a date…";
+  return `<div class="dtp-wrap" id="dtp-${id}">
+    <div class="dtp-row">
+      <button type="button" class="dtp-date-btn ${date?'has-val':''}"
+        onclick="dtpToggleCal('${id}')">${label}</button>
+      <input class="dtp-time" id="dtp-time-${id}" value="${time}"
+        placeholder="HH:MM"
+        onblur="dtpTimeBlur('${id}',this)"
+        oninput="dtpTimeInput('${id}',this)">
+      <button type="button" class="dtp-clear" title="Clear" onclick="dtpClear('${id}')">✕</button>
+    </div>
+    <div class="dtp-cal" id="dtp-cal-${id}"></div>
+  </div>`;
+}
+
+// State per picker: { year, month } for calendar display
+const _dtpState = {};
+function _dtpGetState(id) {
+  if (!_dtpState[id]) {
+    const val = id === 'pl-start' ? state.plData.start : state.plData.end;
+    const { date } = dtpParse(val);
+    const ref = date ? new Date(date) : new Date();
+    _dtpState[id] = { year: ref.getFullYear(), month: ref.getMonth() };
+  }
+  return _dtpState[id];
+}
+
+function dtpToggleCal(id) {
+  const cal = document.getElementById(`dtp-cal-${id}`);
+  const isOpen = cal.classList.contains('open');
+  // close all
+  document.querySelectorAll('.dtp-cal.open').forEach(c => c.classList.remove('open'));
+  if (!isOpen) { dtpRenderCal(id); cal.classList.add('open'); }
+}
+function dtpRenderCal(id) {
+  const cal = document.getElementById(`dtp-cal-${id}`);
+  const s = _dtpGetState(id);
+  const val = id === 'pl-start' ? state.plData.start : state.plData.end;
+  const { date: selDate } = dtpParse(val);
+  const today = new Date(); today.setHours(0,0,0,0);
+  const MONS = ["January","February","March","April","May","June",
+                "July","August","September","October","November","December"];
+  const DOWS = ["Mo","Tu","We","Th","Fr","Sa","Su"];
+  // first day of month (shifted to Mon-start)
+  const first = new Date(s.year, s.month, 1);
+  const startDow = (first.getDay() + 6) % 7; // 0=Mon
+  const daysInMonth = new Date(s.year, s.month + 1, 0).getDate();
+  const daysInPrev  = new Date(s.year, s.month, 0).getDate();
+
+  let grid = DOWS.map(d => `<div class="dtp-cal-dow">${d}</div>`).join('');
+  // leading days from prev month
+  for (let i = startDow - 1; i >= 0; i--) {
+    grid += `<button class="dtp-cal-day other-month" disabled>${daysInPrev - i}</button>`;
+  }
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dt = new Date(s.year, s.month, d);
+    const iso = dt.toISOString().slice(0,10);
+    const isSel = iso === selDate;
+    const isToday = dt.getTime() === today.getTime();
+    grid += `<button class="dtp-cal-day${isSel?' selected':''}${isToday&&!isSel?' today':''}"
+      onclick="dtpPickDay('${id}','${iso}')">${d}</button>`;
+  }
+  // trailing days
+  const total = startDow + daysInMonth;
+  const trailing = total % 7 === 0 ? 0 : 7 - (total % 7);
+  for (let d = 1; d <= trailing; d++) {
+    grid += `<button class="dtp-cal-day other-month" disabled>${d}</button>`;
+  }
+
+  cal.innerHTML = `
+    <div class="dtp-cal-nav">
+      <button onclick="dtpNavMonth('${id}',-1)">‹</button>
+      <span class="dtp-cal-title">${MONS[s.month]} ${s.year}</span>
+      <button onclick="dtpNavMonth('${id}',1)">›</button>
+    </div>
+    <div class="dtp-cal-grid">${grid}</div>`;
+}
+function dtpNavMonth(id, delta) {
+  const s = _dtpGetState(id);
+  s.month += delta;
+  if (s.month > 11) { s.month = 0; s.year++; }
+  if (s.month < 0)  { s.month = 11; s.year--; }
+  dtpRenderCal(id);
+}
+function dtpPickDay(id, iso) {
+  const timeEl = document.getElementById(`dtp-time-${id}`);
+  const time = dtpNormalizeTime(timeEl ? timeEl.value : "00:00");
+  timeEl.value = time;
+  const field = id === 'pl-start' ? 'start' : 'end';
+  state.plData[field] = dtpCompose(iso, time);
+  // update button label
+  const btn = document.querySelector(`#dtp-${id} .dtp-date-btn`);
+  if (btn) { btn.textContent = iso; btn.classList.add('has-val'); }
+  // sync cal state to selected date
+  const ref = new Date(iso);
+  _dtpState[id] = { year: ref.getFullYear(), month: ref.getMonth() };
+  dtpRenderCal(id);
+}
+function dtpClear(id) {
+  const field = id === 'pl-start' ? 'start' : 'end';
+  state.plData[field] = null;
+  delete _dtpState[id];
+  const btn = document.querySelector(`#dtp-${id} .dtp-date-btn`);
+  if (btn) { btn.textContent = "Pick a date…"; btn.classList.remove('has-val'); }
+  const timeEl = document.getElementById(`dtp-time-${id}`);
+  if (timeEl) timeEl.value = "00:00";
+  document.querySelectorAll('.dtp-cal.open').forEach(c => c.classList.remove('open'));
+}
+function dtpNormalizeTime(raw) {
+  const s = (raw || "").trim();
+  if (!s) return "00:00";
+  // Already HH:MM
+  if (/^\d{2}:\d{2}$/.test(s)) return s;
+  // "10" or "1" → "10:00" / "01:00"
+  if (/^\d{1,2}$/.test(s)) return s.padStart(2,'0') + ":00";
+  // "10:1" → "10:01"
+  const m = s.match(/^(\d{1,2}):(\d{1,2})$/);
+  if (m) return m[1].padStart(2,'0') + ":" + m[2].padStart(2,'0');
+  return "00:00";
+}
+function dtpTimeInput(id, el) {
+  // live update state only if date is already set
+  const field = id === 'pl-start' ? 'start' : 'end';
+  const { date } = dtpParse(state.plData[field]);
+  if (date) {
+    // don't normalize yet — wait for blur so user can type freely
+    state.plData[field] = dtpCompose(date, el.value);
+  }
+}
+function dtpTimeBlur(id, el) {
+  const normalized = dtpNormalizeTime(el.value);
+  el.value = normalized;
+  const field = id === 'pl-start' ? 'start' : 'end';
+  const { date } = dtpParse(state.plData[field]);
+  if (date) state.plData[field] = dtpCompose(date, normalized);
+}
+// Close calendars when clicking outside
+document.addEventListener('click', e => {
+  if (!e.target.closest('.dtp-wrap')) {
+    document.querySelectorAll('.dtp-cal.open').forEach(c => c.classList.remove('open'));
+  }
+});
 
 function plSetField(field, value) {
   state.plData[field] = value;
@@ -1255,14 +1610,252 @@ document.querySelectorAll(".modal-overlay").forEach(el => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────
+// RUN NOW
+// ─────────────────────────────────────────────────────────────────────────
+async function runNow(btn) {
+  btn.disabled = true;
+  btn.textContent = "Running…";
+  try {
+    const { data } = await api("POST", "/run-now");
+    if (data.mode === "trigger") {
+      toast("Trigger sent — loop will run within 5s", "ok");
+      btn.textContent = "✓ Triggered";
+      setTimeout(() => { loadStatus(); }, 8000);
+    } else {
+      toast("Running now (direct)…", "ok");
+      btn.textContent = "✓ Running";
+      setTimeout(() => { loadStatus(); btn.disabled = false; btn.textContent = "▶ Run now"; }, 15000);
+    }
+  } catch(e) {
+    toast(e.message, "err");
+    btn.disabled = false;
+    btn.textContent = "▶ Run now";
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// SETTINGS
+// ─────────────────────────────────────────────────────────────────────────
+let _settingsData = {};
+let _dzData = null;  // the default_zone cfg object being edited
+
+async function loadSettings() {
+  try {
+    const { data } = await api("GET", "/settings");
+    _settingsData = data;
+    document.getElementById("set-loop-interval").value = data.loop_interval ?? 60;
+
+    _dzData = data.default_zone
+      ? JSON.parse(JSON.stringify(data.default_zone))
+      : { away_temp: 15, away_enabled: true, preheat: "ECO", early_start: false };
+    settingsDzRender();
+  } catch(e) { toast(e.message, "err"); }
+}
+
+function settingsDzClear() {
+  _dzData = { away_temp: 15, away_enabled: true, preheat: "ECO", early_start: false };
+  settingsDzRender();
+}
+
+function settingsDzRender() {
+  const el = document.getElementById("set-dz-editor");
+  if (!_dzData) {
+    _dzData = { away_temp: 15, away_enabled: true, preheat: "ECO", early_start: false };
+  }
+  el.innerHTML = renderDzCard(_dzData);
+}
+
+// Render a standalone zone editor (no zone name, no delete btn) reusing wc card patterns
+function renderDzCard(cfg) {
+  const hasTT = !!cfg.timetable;
+  const tt    = cfg.timetable || "";
+  const keys  = TT_KEYS[tt] || [];
+
+  let slotsHtml = "";
+  if (hasTT) {
+    const tabBtns = keys.length > 1
+      ? `<div class="tt-tabs">${keys.map((k,i) =>
+          `<button class="tt-tab ${i===0?'active':''}" onclick="dzShowTab('${k}',this)">${k}</button>`
+        ).join("")}</div>`
+      : "";
+    const slotPanes = keys.map((k,i) => `
+      <div id="dz-pane-${k}" style="${i>0?'display:none':''}">
+        <table class="slots-table">
+          <tr><th>Start</th><th>Temp °C</th><th></th></tr>
+          ${(cfg[k]||[]).map((s,si) => `
+          <tr>
+            <td><input value="${s.start}" oninput="dzSetSlot('${k}',${si},'start',this.value)"></td>
+            <td><input type="number" step="0.5" value="${s.temp}" oninput="dzSetSlot('${k}',${si},'temp',+this.value)"></td>
+            <td><button class="slot-del" onclick="dzDelSlot('${k}',${si})">✕</button></td>
+          </tr>`).join("")}
+        </table>
+        <button class="btn btn-secondary btn-sm" style="margin-top:6px" onclick="dzAddSlot('${k}')">+ Slot</button>
+      </div>`).join("");
+    slotsHtml = tabBtns + slotPanes;
+  }
+
+  return `
+    <div class="form-row" style="margin-bottom:12px">
+      <div class="form-group">
+        <label class="form-label">Timetable</label>
+        <select class="form-select" onchange="dzSetTimetable(this.value)">
+          <option value=""${!hasTT?' selected':''}>Away only (no timetable)</option>
+          ${["Mon-Sun","Mon-Fri, Sat, Sun","Mon, ..., Sun"].map(t =>
+            `<option${t===tt?' selected':''}>${t}</option>`
+          ).join("")}
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Away temp (°C)</label>
+        <input class="form-input" type="number" step="0.5"
+          value="${cfg.away_temp ?? 15}"
+          oninput="dzSetMeta('away_temp',+this.value)">
+      </div>
+    </div>
+    <div class="form-row" style="margin-bottom:12px">
+      <div class="form-group">
+        <label class="form-label">Preheat</label>
+        <select class="form-select" onchange="dzSetMeta('preheat',this.value)">
+          ${PREHEAT_OPTS.map(p => `<option${(cfg.preheat||'ECO')===p?' selected':''}>${p}</option>`).join("")}
+        </select>
+      </div>
+      <div class="form-group" style="display:flex;flex-direction:column;justify-content:flex-end">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:4px">
+          <input type="checkbox" ${cfg.away_enabled!==false?'checked':''}
+            onchange="dzSetMeta('away_enabled',this.checked)">
+          <span class="form-label" style="margin:0">Away enabled</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" ${cfg.early_start?'checked':''}
+            onchange="dzSetMeta('early_start',this.checked)">
+          <span class="form-label" style="margin:0">Early start</span>
+        </label>
+      </div>
+    </div>
+    ${hasTT ? slotsHtml : ''}`;
+}
+
+function dzShowTab(key, btn) {
+  const editor = document.getElementById("set-dz-editor");
+  editor.querySelectorAll(".tt-tab").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  editor.querySelectorAll("[id^='dz-pane-']").forEach(p => p.style.display = "none");
+  document.getElementById(`dz-pane-${key}`).style.display = "";
+}
+function dzSetMeta(field, value) { if (_dzData) _dzData[field] = value; }
+function dzSetTimetable(value) {
+  if (!_dzData) return;
+  for (const k of ["Mon-Sun","Mon-Fri","Sat","Sun","Mon","Tue","Wed","Thu","Fri"]) delete _dzData[k];
+  delete _dzData.timetable;
+  if (value) {
+    _dzData.timetable = value;
+    for (const k of (TT_KEYS[value] || [])) _dzData[k] = [];
+  }
+  settingsDzRender();
+}
+function dzSetSlot(key, idx, field, value) { if (_dzData) _dzData[key][idx][field] = value; }
+function dzAddSlot(key) {
+  if (!_dzData) return;
+  _dzData[key].push({"start":"00:00","temp":16});
+  settingsDzRender();
+}
+function dzDelSlot(key, idx) {
+  if (!_dzData) return;
+  _dzData[key].splice(idx, 1);
+  settingsDzRender();
+}
+
+async function settingsSave() {
+  const errEl = document.getElementById("set-settings-err");
+  errEl.textContent = "";
+  const interval = parseInt(document.getElementById("set-loop-interval").value);
+  if (isNaN(interval) || interval < 1) {
+    errEl.textContent = "Loop interval must be a positive integer."; return;
+  }
+  const payload = {
+    loop_interval: interval,
+    default_zone: _dzData ? JSON.parse(JSON.stringify(_dzData)) : null,
+  };
+  try {
+    await api("POST", "/settings", payload);
+    _settingsData = payload;
+    toast("Settings saved", "ok");
+  } catch(e) { errEl.textContent = e.message; }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// LOGS
+// ─────────────────────────────────────────────────────────────────────────
+let _logsAutoRefresh = null;
+
+async function loadLogs() {
+  const out  = document.getElementById("log-output");
+  const meta = document.getElementById("log-meta");
+  const lines = document.getElementById("log-lines")?.value || 200;
+  try {
+    const { data } = await api("GET", `/logs?lines=${lines}`);
+    if (!data.has_log && !data.lines?.length) {
+      out.textContent = "No log file yet — run the scheduler once to generate logs.";
+      meta.textContent = "";
+      return;
+    }
+    const content = data.lines.join("
+");
+    // Colorise lines by tag
+    out.innerHTML = data.lines.map(line => {
+      let color = "";
+      if (/\[ERROR\]|\[!\]/.test(line))      color = "color:#f87171";
+      else if (/\[WARN\]/.test(line))        color = "color:#fbbf24";
+      else if (/\[AUTH\]/.test(line))        color = "color:#a78bfa";
+      else if (/\[UPDATE\]/.test(line))      color = "color:#34d399";
+      else if (/\[SKIP\]/.test(line))        color = "color:#6b7280";
+      else if (/\[✓\]/.test(line))           color = "color:#34d399";
+      else if (/\[TADO\]/.test(line))        color = "color:#60a5fa";
+      else if (/\[APPLY\]/.test(line))       color = "color:#f59e0b";
+      else if (/\[VERIFY\]/.test(line))      color = "color:#f59e0b";
+      const escaped = line.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+      return color ? `<span style="${color}">${escaped}</span>` : escaped;
+    }).join("
+");
+    meta.textContent = `${data.total} total lines · showing last ${data.lines.length}`;
+    // Auto-scroll to bottom
+    if (document.getElementById("log-autoscroll")?.checked) {
+      out.scrollTop = out.scrollHeight;
+    }
+  } catch(e) {
+    out.textContent = `Error loading logs: ${e.message}`;
+  }
+}
+
+async function clearLogs() {
+  if (!confirm("Clear all logs?")) return;
+  try {
+    await api("POST", "/logs/clear");
+    document.getElementById("log-output").textContent = "Logs cleared.";
+    document.getElementById("log-meta").textContent = "";
+    toast("Logs cleared", "ok");
+  } catch(e) { toast(e.message, "err"); }
+}
+
+// Auto-refresh — only active when on logs tab
+function _startLogsAutoRefresh() {
+  _stopLogsAutoRefresh();
+  _logsAutoRefresh = setInterval(loadLogs, 5000);
+}
+function _stopLogsAutoRefresh() {
+  if (_logsAutoRefresh) { clearInterval(_logsAutoRefresh); _logsAutoRefresh = null; }
+}
+// NOT started here — started only when logs tab is opened
+
+// ─────────────────────────────────────────────────────────────────────────
 // INIT — preload weekconfigs so config selects work in plannings
 // ─────────────────────────────────────────────────────────────────────────
 (async () => {
-  try {
-    const { data } = await api("GET", "/weekconfigs");
-    state.wc = data.weekconfigs || {};
-  } catch(e) {}
-  loadStatus();
+  // Load weekconfigs and status in parallel — status must not wait for weekconfigs
+  const [wcResult] = await Promise.allSettled([
+    api("GET", "/weekconfigs").then(r => { state.wc = r.data.weekconfigs || {}; }),
+    loadStatus()
+  ]);
 })();
 
 </script>
