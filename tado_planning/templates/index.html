@@ -823,12 +823,30 @@ async function loadStatus() {
 // state.wcIsNew = true if not yet saved to server
 
 // ─────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────
+// ZONE NORMALIZATION
+// away_temp, away_enabled, preheat are all-or-nothing: if any is present,
+// complete the others with defaults so the JSON is always fully defined.
+// ─────────────────────────────────────────────────────────────────────────
+function normalizeZone(zcfg) {
+  const AWAY = ["away_temp", "away_enabled", "preheat"];
+  if (AWAY.some(k => k in zcfg)) {
+    if (!("away_temp"    in zcfg)) zcfg.away_temp    = 15;
+    if (!("away_enabled" in zcfg)) zcfg.away_enabled = true;
+    if (!("preheat"      in zcfg)) zcfg.preheat      = "ECO";
+  }
+  if (!("early_start" in zcfg)) zcfg.early_start = false;
+  return zcfg;
+}
+
 // WEEKCONFIGS — LIST
 // ─────────────────────────────────────────────────────────────────────────
 async function loadWeekconfigs() {
   try {
     const { data } = await api("GET", "/weekconfigs");
     state.wc = data.weekconfigs || {};
+    for (const cfg of Object.values(state.wc))
+      for (const zone of Object.values(cfg)) normalizeZone(zone);
     renderWcList();
     if (state.wcCurrent && (state.wc[state.wcCurrent] || state.wcIsNew)) {
       renderWcDetail();
@@ -1065,7 +1083,7 @@ function wcConfirmAddZone() {
   if (state.wcData[name]) { err.textContent = "Zone already exists"; return; }
   // Use default_zone template if configured and available
   const tpl = _dzData ? JSON.parse(JSON.stringify(_dzData)) : null;
-  state.wcData[name] = tpl || { away_temp: 15, away_enabled: true };
+  state.wcData[name] = normalizeZone(tpl || { away_temp: 15, away_enabled: true, preheat: "ECO" });
   closeModal("wc-add-zone");
   renderWcDetail();
 }
