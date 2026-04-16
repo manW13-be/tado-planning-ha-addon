@@ -187,6 +187,16 @@ def validate_zone_cfg(zone: str, cfg: object) -> list[str]:
     if not isinstance(cfg, dict):
         return [f"[VALIDATION] '{zone}': expected dict, got {type(cfg).__name__}"]
 
+    AWAY_FIELDS = ("away_temp", "away_enabled", "preheat")
+    away_present = [k for k in AWAY_FIELDS if k in cfg]
+    if away_present and len(away_present) < len(AWAY_FIELDS):
+        missing = [k for k in AWAY_FIELDS if k not in cfg]
+        errors.append(
+            f"[VALIDATION] '{zone}': incomplete away config — "
+            f"present: {away_present}, missing: {missing}. "
+            f"All three fields (away_temp, away_enabled, preheat) must be defined together."
+        )
+
     if "away_temp" in cfg:
         try:
             float(cfg["away_temp"])
@@ -911,9 +921,11 @@ def print_config_summary(config_name: str, zone_cfg_map: dict, level: int):
         if "early_start" in cfg:
             log(f"    Early start: {'enabled' if cfg['early_start'] else 'disabled'}", 1)
         if any(k in cfg for k in ("away_temp", "away_enabled", "preheat")):
-            log(f"    Away       : {cfg.get('away_temp', '?')}°C, "
-                f"preheat={cfg.get('preheat', '?')}, "
-                f"enabled={cfg.get('away_enabled', True)}", 1)
+            def _fmt(val, default, unit=""):
+                return f"{val}{unit}" if val is not None else f"(not set → {default}{unit})"
+            log(f"    Away       : {_fmt(cfg.get('away_temp'), 15.0, '°C')}, "
+                f"preheat={_fmt(cfg.get('preheat'), 'ECO')}, "
+                f"enabled={cfg.get('away_enabled', '(not set → True)')}", 1)
     log("", 1)
 
 
