@@ -833,43 +833,65 @@ def apply_zone_config(tado: Tado, zone_id: int, zone_key: str, zone_cfg: dict):
         log(f"[OK]   '{zone_key}' away: {away_temp}°C preheat={preheat_level}", 1)
 
 
-def apply_level(tado: Tado, level: int, config_name: str,
-                weekconfigs: dict, source_label: str = ""):
-    zone_cfg_map = weekconfigs[config_name]
-    zone_targets = list(zone_cfg_map.keys())
+def merge_zone_configs(cfg_l1: dict, cfg_l2: dict | None) -> dict:
+    """
+    Merge level-1 and level-2 zone configs into a single virtual config.
+    Level-2 keys override level-1 keys where present.
+    If cfg_l2 is None, returns a copy of cfg_l1 unchanged.
+    """
+    import copy
+    merged = copy.deepcopy(cfg_l1)
+    if cfg_l2:
+        merged.update(copy.deepcopy(cfg_l2))
+    return merged
 
-    log(f"\n[APPLY level {level}] '{config_name}' "
-        f"{source_label} — {len(zone_targets)} zone(s)...")
+
+def apply_merged(tado: Tado,
+                 zone_merged_map: dict[str, dict],
+                 zone_l1_cfg_name: dict[str, str],
+                 zone_l2_cfg_name: dict[str, str]):
+    """
+    Compare and apply a fully-merged (L1 + L2) config per zone in a single pass.
+
+    zone_merged_map   : {zone_key: merged_cfg}
+    zone_l1_cfg_name  : {zone_key: l1_config_name}   (for logging)
+    zone_l2_cfg_name  : {zone_key: l2_config_name}   (for logging, may be absent)
+    """
+    zone_targets = list(zone_merged_map.keys())
+    log(f"\n[APPLY] Merged config — {len(zone_targets)} zone(s)...")
 
     zones = find_zones(tado, zone_targets)
     if not zones:
-        log(f"[ERROR] No zones from level {level} config '{config_name}' found in Tado!")
+        log("[ERROR] No zones found in Tado for the resolved configs!")
         sys.exit(1)
 
     updated = 0
     skipped = 0
     for zone_key, zone_id in zones.items():
-        zone_cfg = zone_cfg_map[zone_key]
-        if not zone_needs_update(tado, zone_id, zone_cfg, zone_key):
-            log(f"[SKIP]  '{zone_key}' — already compliant, no changes needed.")
+        merged_cfg = zone_merged_map[zone_key]
+        l1 = zone_l1_cfg_name.get(zone_key, "?")
+        l2 = zone_l2_cfg_name.get(zone_key)
+        label = f"L1={l1}" + (f" + L2={l2}" if l2 else "")
+        if not zone_needs_update(tado, zone_id, merged_cfg, zone_key):
+            log(f"[SKIP]  '{zone_key}' ({label}) — already compliant, no changes needed.")
             skipped += 1
             continue
-        log(f"[UPDATE] '{zone_key}' — applying changes...")
-        apply_zone_config(tado, zone_id, zone_key, zone_cfg)
+        log(f"[UPDATE] '{zone_key}' ({label}) — applying changes...")
+        apply_zone_config(tado, zone_id, zone_key, merged_cfg)
         updated += 1
 
-    log(f"[✓] Level {level} '{config_name}': {updated} zone(s) updated, {skipped} unchanged.")
+    log(f"[✓] {updated} zone(s) updated, {skipped} unchanged.")
 
     # Verification pass
-    log(f"\n[VERIFY level {level}] Re-reading from Tado...", 1)
+    log("\n[VERIFY] Re-reading from Tado...", 1)
     all_ok = True
     for zone_key, zone_id in zones.items():
-        zone_cfg = zone_cfg_map[zone_key]
-        if zone_needs_update(tado, zone_id, zone_cfg, zone_key):
+        merged_cfg = zone_merged_map[zone_key]
+        if zone_needs_update(tado, zone_id, merged_cfg, zone_key):
             log(f"[!] '{zone_key}' still differs after apply.")
             all_ok = False
     if all_ok:
-        log(f"[✓] Verification OK — schedule is compliant.")
+        log("[✓] Verification OK — schedule is compliant.")
 
 
 # ---------------------------------------------------------------------------
@@ -966,17 +988,49 @@ def main():
         for cfg in to_apply[level]:
             print_config_summary(cfg, weekconfigs[cfg], level)
 
-    # Step 5 — connect and apply
+    # Step 5 — build merged configs per zone (L1 overridden by L2 where present)
+    zone_merged_map  = {}   # {zone: merged_cfg}
+    zone_l1_cfg_name = {}   # {zone: cfg_name}
+    zone_l2_cfg_name = {}   # {zone: cfg_name}
+
+    for zone in all_zones:
+        # Resolve L1 config for this zone
+        l1_cfg_name = None
+        for cfg, zones_for_cfg in to_apply[1].items():
+            if zone in zones_for_cfg:
+                l1_cfg_name = cfg
+                break
+
+        if l1_cfg_name is None:
+            continue  # zone has no L1 → skip entirely
+
+        zone_l1_cfg_name[zone] = l1_cfg_name
+        cfg_l1 = weekconfigs[l1_cfg_name][zone]
+
+        # Resolve optional L2 config for this zone
+        l2_cfg_name = None
+        for cfg, zones_for_cfg in to_apply[2].items():
+            if zone in zones_for_cfg:
+                l2_cfg_name = cfg
+                break
+
+        cfg_l2 = weekconfigs[l2_cfg_name][zone] if l2_cfg_name else None
+        if l2_cfg_name:
+            zone_l2_cfg_name[zone] = l2_cfg_name
+
+        zone_merged_map[zone] = merge_zone_configs(cfg_l1, cfg_l2)
+
+    if not zone_merged_map:
+        log("[WARN] No configs resolved for any zone — nothing to apply.")
+        return
+
+    # Step 6 — connect and apply merged config in a single pass
     log("[TADO] Connecting...")
     tado      = get_tado_client()
     home_name = tado.get_me()["homes"][0]["name"]
     log(f"[TADO] Home: '{home_name}'")
 
-    for level in (1, 2):
-        for cfg, zones in to_apply[level].items():
-            # Build a subset weekconfig containing only the relevant zones
-            subset = {z: weekconfigs[cfg][z] for z in zones if z in weekconfigs[cfg]}
-            apply_level(tado, level, cfg, {cfg: subset}, f"(zones: {', '.join(zones)})")
+    apply_merged(tado, zone_merged_map, zone_l1_cfg_name, zone_l2_cfg_name)
 
 
 if __name__ == "__main__":
