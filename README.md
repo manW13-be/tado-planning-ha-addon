@@ -15,7 +15,8 @@ Automated Tado heating schedule management for households with a **shared custod
 - [Prerequisites](#prerequisites)
 - [Setup — Home Assistant](#setup--home-assistant)
 - [Setup — macOS](#setup--macos)
-- [Schedule file format](#schedule-file-format)
+- [Web configurator](#web-configurator)
+- [Data file format](#data-file-format)
 - [Manual runs and testing](#manual-runs-and-testing)
 - [Verbosity levels](#verbosity-levels)
 - [Updating](#updating)
@@ -25,7 +26,6 @@ Automated Tado heating schedule management for households with a **shared custod
   - [Scripts reference](#scripts-reference)
   - [Development workflow](#development-workflow)
   - [Versioning](#versioning)
-  - [Adding a new schedule config](#adding-a-new-schedule-config)
   - [Known issues and quirks](#known-issues-and-quirks)
 - [Credits](#credits)
 - [License](#license)
@@ -38,9 +38,10 @@ Tado is a smart heating system, and Home Assistant has solid Tado integration �
 
 tado-planning is not an alternative interface to control Tado. It is a purpose-built layer that sits on top of Tado's API to work around this limitation, adding:
 
-- **Two-week cycle support** — odd and even ISO weeks can carry different heating configurations
-- **Exception periods** — any planning file can define a date/time range during which it overrides the standard two-week cycle, for any duration (a day, a week, a school holiday period)
-- **Two independent configuration levels** — allowing two separate sets of heating rules to coexist and interact on the same zones at the same time
+- **Two-week cycle support** — odd and even ISO weeks (or a sequential two-week count from a reference date) can carry different heating configurations
+- **Exception periods** — any planning can define a start/end window during which it overrides the standard cycle, for any duration
+- **Two independent configuration levels** — allowing two separate sets of heating rules to coexist on the same zones simultaneously
+- **Web configurator** — a built-in Flask UI to manage all configurations without editing JSON files by hand
 
 ---
 
@@ -57,13 +58,12 @@ tado-planning is not an alternative interface to control Tado. It is a purpose-b
 ┌───────────────▼───────┐   ┌─────────▼───────────────┐
 │      macOS (Mac)      │   │  Home Assistant (ODROID) │
 │                       │   │                          │
-│  tado_planning.py     │   │  tado-planning add-on    │
-│  via launchd          │   │  via HA scheduler        │
-│  (hourly)             │   │  (hourly)                │
-│                       │   │                          │
-│  tado_refresh_token   │   │  tado_refresh_token      │
-│  schedules/           │   │  /config/tado-planning/  │
-│                       │   │  schedules/              │
+│  tado-planning-run.py │   │  tado-planning add-on    │
+│  via launchd (hourly) │   │  Docker container        │
+│                       │   │  --loop mode             │
+│  tado-planning-cfg.py │   │                          │
+│  on demand (--cfg)    │   │  tado-planning-cfg.py    │
+│                       │   │  always running          │
 └───────────────────────┘   └──────────────────────────┘
                 │                     │
                 └──────────┬──────────┘
@@ -73,59 +73,72 @@ tado-planning is not an alternative interface to control Tado. It is a purpose-b
                     └─────────────┘
 ```
 
-The same Python script (`tado_planning.py`) runs in both environments. Every hour it checks which configuration should be active, compares it to what is already set on Tado, and only pushes changes when something has actually changed.
+Every hour the scheduler checks which configuration should be active, compares it to what is already set on Tado, and only pushes changes when something has actually changed.
 
 ---
 
 ## Key concepts
 
-### Planning files
+### Plannings
 
-A **planning file** defines *when* to switch heating configurations. It contains a list of events, each specifying a weekday, a time, an ISO week parity, and which Tado configuration to apply.
+A **planning** defines *when* to switch heating configurations. It contains a list of events, each specifying a weekday, a time, a week parity, a level, and which weekconfig to apply.
 
-> `day` and `time` in a planning event define *when the configuration switches* — not the heating time slots inside the zones. Heating time slots are defined in the weekconfig file itself.
+There are two kinds of plannings:
 
-There are two kinds of planning files:
+- **Standard planning** — the baseline cycle (`start: null`, `end: null`), always active. Exactly one must exist.
+- **Exception plannings** — define a `start` and/or `end` date/time. During that window they take precedence over the standard planning. Once the period ends, the standard planning resumes automatically. Multiple exceptions can coexist — the one whose `start` is most recent wins.
 
-- **`planning_standard.json`** — the baseline two-week cycle, always active
-- **Exception plannings** (e.g. `planning_paques2026.json`) — define a `period` with a start and end date/time. During that window they take precedence over the standard planning. Once the period ends, the standard planning resumes automatically. Multiple exceptions can coexist — if two overlap, the one that started most recently wins.
+### Weekconfigs
 
-### Tado configuration files (weekconfigs)
+A **weekconfig** defines *what* to apply to Tado: temperatures, time slots, timetable type, away mode, preheat — per zone. Only the zones listed in a weekconfig are touched when it is applied.
 
-A **weekconfig file** defines *what* to apply to Tado: temperatures, time slots, timetable type, away mode, and preheat — per zone. Only the zones listed in a weekconfig are updated when it is applied.
+All weekconfigs are stored together in `weekconfigs.json`.
 
 ### Configuration levels
 
 Planning events carry a **level** (1 or 2):
 
 - **Level 1** — defines the main heating configuration for a set of zones
-- **Level 2** — defines its own configuration for a set of zones, independently of level 1
+- **Level 2** — defines its own configuration independently of level 1
 
-Level 1 and level 2 can reference **completely different zones** — in that case they are fully independent. If they reference **the same zone**, level 2 is applied on top of what level 1 has already set on Tado, modifying only the settings it specifies and leaving the rest intact.
+Level 1 and level 2 can cover **different zones** (fully independent) or the **same zones** (level 2 applied on top of level 1, only modifying what it specifies).
+
+### Cycle types
+
+| Cycle | Description |
+|-------|-------------|
+| `one-week` | 7-day repeating cycle — `week` field on events is ignored |
+| `two-weeks-iso` | Alternates on odd/even ISO week number |
+| `two-weeks-seq` | Alternates on a two-week count from a `ref_date` |
 
 ### Selection logic
 
-Every hour, the script finds the most recent past event in the current two-week cycle (odd + even weeks combined) and applies the corresponding weekconfig. If no event has occurred yet in the current cycle, it wraps around to the last event of the previous cycle.
+Every hour, for each level independently:
+1. Find all plannings active at the current time, ordered by precedence
+2. In the winning planning, find the last past event in the current cycle
+3. If no past event exists yet, wrap around to the last event of the previous cycle
+4. Load the corresponding weekconfig and compare zone by zone with Tado's current state
+5. Push only the zones that have actually changed
 
 ---
 
 ## Example scenario
 
-**Standard two-week cycle:**
+**Standard two-week cycle (two-weeks-iso):**
 - **Odd weeks**: kids are away → apply `kidsabsent` (lower temperatures in kids' rooms)
 - **Even weeks**: kids are home → apply `kidspresent` (normal temperatures throughout)
 
 **Level 2 example — cleaning day (even weeks):**
-The cleaning lady arrives Tuesday morning. Tado doesn't detect her as present, so the house stays in away mode — but the minimum temperature needs to be 18°C while she works.
-- **Tuesday 06:30** → apply `away_18deg` (level 2): raises away temperature to 18°C on all zones
-- **Tuesday 11:30** → apply `away_15deg` (level 2): resets away temperature to 15°C once she leaves
+The cleaning lady arrives Tuesday morning. The house is in away mode, but the minimum temperature needs to be 18°C while she works.
+- **Tuesday 06:30** → apply `away_18deg` (level 2): raises away temperature on all zones
+- **Tuesday 11:30** → apply `away_15deg` (level 2): resets away temperature
 
-Since `kidspresent` (level 1) and `away_18deg` (level 2) cover the same zones, the level 2 away temperature is applied on top of the level 1 schedule already set on Tado — without touching the time slots or any other settings.
+Since `kidspresent` (level 1) and `away_18deg` (level 2) cover the same zones, the level 2 setting is applied on top of the level 1 schedule already set on Tado — without touching time slots or other settings.
 
-**Exception planning — Easter holidays:**
-- `planning_paques2026.json` defines a period from 2026-04-05 to 2026-04-19
-- During that period, `vacancewithkids` is applied regardless of odd/even week
-- After 2026-04-19, `planning_standard.json` resumes automatically
+**Exception planning — exam period:**
+- `preblocus` has `start: "2026-05-01 00:00"`, `end: "2026-05-08 00:00"`, cycle `one-week`
+- During that week, `kidspresent` is applied regardless of odd/even ISO week
+- After the end date, `standard` resumes automatically
 
 ---
 
@@ -133,47 +146,53 @@ Since `kidspresent` (level 1) and `away_18deg` (level 2) cover the same zones, t
 
 ```
 tado-planning/
-├── tado_planning.py              # Main script (runs on both Mac and HA)
-├── config.json                   # HA add-on manifest (version, schema, etc.)
-├── Dockerfile                    # aarch64 container for ODROID N2+
-├── run.sh                        # Universal entrypoint (Mac, HA SSH, Docker)
-├── gitignore                     # Finder/Samba-visible copy of .gitignore
-├── schedules/                    # Your personal schedule files (gitignored)
-│   ├── planning_standard.json    # Standard two-week cycle definition
-│   ├── planning_*.json           # Exception plannings (specific periods)
-│   ├── kidspresent.json          # Level 1 weekconfig — kids at home
-│   ├── kidsabsent.json           # Level 1 weekconfig — kids away
-│   ├── vacancewithkids.json      # Level 1 weekconfig — school holidays
-│   ├── away_15deg.json           # Level 2 weekconfig — away mode at 15°C
-│   └── away_18deg.json           # Level 2 weekconfig — away mode at 18°C
-├── logs/                         # Log files (gitignored)
-└── scripts/
-    ├── list_zones.sh             # List Tado zones (Mac + HA SSH)
-    ├── fetch.sh                  # Pull from GitHub (Mac + HA SSH)
-    ├── push.sh                   # Commit + push to GitHub (Mac + HA SSH)
-    ├── ha_deploy.sh              # Rebuild Docker image + restart add-on (HA SSH)
-    ├── install_launchd.sh        # macOS: install & activate launchd agent
-    └── uninstall_launchd.sh      # macOS: deactivate & remove launchd agent
+├── tado_planning/
+│   ├── run.sh                    # Universal entry point
+│   ├── tado-planning-run.py      # Scheduler — reads plannings, applies to Tado
+│   ├── tado-planning-cfg.py      # Web configurator (Flask)
+│   ├── config.json               # HA add-on manifest (version, schema, ports)
+│   ├── Dockerfile                # aarch64 container for ODROID N2+
+│   ├── static/                   # Web UI static assets
+│   ├── templates/
+│   │   └── index.html            # Web UI single-page app
+│   └── tado_refresh_token        # OAuth token (gitignored)
+├── schedules/                    # Personal schedule data (gitignored)
+│   ├── weekconfigs.json          # All zone configurations
+│   ├── plannings.json            # All plannings (standard + exceptions)
+│   ├── settings.json             # loop_interval, default_zone template
+│   ├── loop_status.json          # Current loop state (runtime)
+│   └── tado-planning.log         # Rotated log (500 KB max)
+├── scripts/
+│   ├── list_zones.sh             # List Tado zones (Mac + HA SSH)
+│   ├── git_fetch.sh              # Pull from GitHub
+│   ├── git_push.sh               # Commit + push to GitHub
+│   ├── launchd_install.sh        # macOS: install & activate launchd agent
+│   ├── launchd_uninstall.sh      # macOS: deactivate & remove launchd agent
+│   ├── docker_test_build.sh      # Build test Docker image
+│   ├── docker_test_start.sh      # Start test container
+│   ├── docker_test_stop.sh       # Stop test container
+│   └── docker_test_remove.sh     # Remove test image
+└── repository.json               # HA repository metadata
 ```
 
 ---
 
 ## Choosing your platform
 
-tado-planning runs on **Home Assistant** (as an add-on) or on **macOS** (via launchd). Both platforms run the same script on the same hourly schedule and produce identical results.
+tado-planning runs on **Home Assistant** (as an add-on) or on **macOS** (via launchd). Both platforms run the same scheduler and produce identical results.
 
 > **Run it on one platform only.** Running both simultaneously risks pushing conflicting configurations to Tado.
 
-- **Home Assistant** — recommended if HA is always running and you want everything in one place
-- **macOS** — useful if you don't have a permanent HA setup, or prefer managing config from your Mac
+- **Home Assistant** — recommended if HA is always running and you want everything in one place. The web configurator is accessible as an HA panel.
+- **macOS** — useful if you prefer managing config from your Mac. Start the configurator on demand with `--cfg`.
 
 ---
 
 ## Prerequisites
 
 - A Tado account with at least one heating zone
-- For Home Assistant: HAOS on aarch64 (tested on ODROID N2+), SSH access
-- For macOS: Python 3.11+ via Homebrew, `jq`
+- For Home Assistant: HAOS on aarch64 (tested on ODROID N2+), SSH add-on access
+- For macOS: Python 3.11+ (`brew install python@3.11`), `jq` (`brew install jq`)
 
 ---
 
@@ -187,54 +206,42 @@ tado-planning runs on **Home Assistant** (as an add-on) or on **macOS** (via lau
 4. Click **tado-planning → Install** — the Docker image builds on your device (3–5 min on ODROID N2+)
 5. Do **not** start the add-on yet
 
-### Step 2 — Create your schedule directory
-
-The schedules directory is created automatically on first run. You can also create it manually:
-
-```bash
-mkdir -p /config/tado-planning/schedules
-```
-
-The files are then accessible via Samba at `smb://homeassistant.local/config/tado-planning/schedules/`.
-
-### Step 3 — List your Tado zones
+### Step 2 — Authenticate with Tado
 
 ```bash
 ./scripts/list_zones.sh
 ```
 
-Connects to Tado, authenticates if needed, and lists all your zones with their exact names. Note them — you will need them in your weekconfig files.
+On first run, a URL is printed — open it in a browser, log in with your Tado account, and authorize the device. The refresh token is saved to `/config/tado-planning/tado_refresh_token` and reused automatically.
 
-### Step 4 — Configure your schedule files
+Note the exact zone names — you will need them when configuring weekconfigs.
 
-Edit the files in `/config/tado-planning/schedules/` via Samba or SSH:
+### Step 3 — Start the add-on
 
-1. **`planning_standard.json`** — adapt days and times to your actual custody handover schedule
-2. **`kidspresent.json`** and **`kidsabsent.json`** — set temperatures and time slots using the zone names from step 3
-3. **`away_15deg.json`** and **`away_18deg.json`** — keep, adapt, or remove depending on your planning
-4. **Exception plannings** — add `planning_*.json` files for holidays or other periods as needed
+In HA: **Settings → Add-ons → tado-planning → Start**
 
-See [Schedule file format](#schedule-file-format) below for the full syntax.
+The add-on starts in `--loop` mode: the scheduler runs on its configured interval, and the web configurator is available immediately.
+
+### Step 4 — Configure your schedules via the web UI
+
+The add-on panel is accessible in the HA sidebar at **Tado Planning**, or directly at `http://ha2.local:8099`.
+
+Use the web configurator to:
+1. Create your **weekconfigs** (zone temperature profiles)
+2. Create your **plannings** (standard cycle + any exception periods)
+3. Check the **Status** tab to verify the current resolved configuration per zone
+
+See [Web configurator](#web-configurator) below.
 
 ### Step 5 — Verify manually
 
 ```bash
-./run.sh -vv
+./tado_planning/run.sh -vv
 ```
 
-On first run a URL is printed — open it in your browser, log in with your Tado account, and authorize the device. The token is saved automatically. Check that the correct configurations are selected and zones are updated as expected.
+Check that the correct configurations are selected and zones are updated as expected.
 
-### Step 6 — Start the add-on
-
-In HA: **Settings → Add-ons → tado-planning → Start**
-
-Check the **Logs** tab to confirm normal operation. To follow logs via SSH:
-
-```bash
-ha apps logs fc4e2b3e_tado_planning
-```
-
-### Step 7 — Set verbosity (optional)
+### Step 6 — Set verbosity (optional)
 
 In the add-on **Configuration** tab, set `verbosity` (0–4). See [Verbosity levels](#verbosity-levels) below.
 
@@ -250,178 +257,208 @@ git clone https://github.com/manW13-be/tado-planning-ha-addon.git tado-planning
 cd tado-planning
 ```
 
-### Step 2 — Create your schedule directory
-
-The `schedules/` directory is created automatically on first run. You can also create it manually:
-
-```bash
-mkdir -p schedules
-```
-
-### Step 3 — List your Tado zones
+### Step 2 — Authenticate with Tado
 
 ```bash
 ./scripts/list_zones.sh
 ```
 
-On first run this opens a browser tab to authenticate with Tado. The token is saved to `tado_refresh_token` in the project root and reused automatically. Note the exact zone names.
+Opens a browser tab to authenticate with Tado. The token is saved to `tado_planning/tado_refresh_token` and reused automatically. Note the exact zone names.
 
-### Step 4 — Configure your schedule files
-
-Edit the files in `schedules/`:
-
-1. **`planning_standard.json`** — adapt days and times to your custody schedule
-2. **`kidspresent.json`** and **`kidsabsent.json`** — set temperatures per zone
-3. **`away_15deg.json`** and **`away_18deg.json`** — keep, adapt, or remove as needed
-4. **Exception plannings** — add `planning_*.json` files for holidays as needed
-
-### Step 5 — Verify manually
+### Step 3 — Configure your schedules via the web UI
 
 ```bash
-./run.sh -vv
+./tado_planning/run.sh --cfg
 ```
 
-The token is already saved from step 3. Use `-vvv` for API-level detail, or `-d YYYY-MM-DD` to simulate a specific date.
+Opens the web configurator at `http://localhost:8080` in your browser. Use it to:
+1. Create your **weekconfigs** (zone temperature profiles)
+2. Create your **plannings** (standard cycle + exceptions)
+3. Check the **Status** tab to verify the current state
 
-### Step 6 — Install the launchd agent
+See [Web configurator](#web-configurator) below. Stop with Ctrl+C when done.
+
+### Step 4 — Verify manually
+
+```bash
+./tado_planning/run.sh -vv
+```
+
+Use `-d YYYY-MM-DD` to simulate a specific date. Check that configurations are applied correctly.
+
+### Step 5 — Install the launchd agent
 
 Once everything works correctly:
 
 ```bash
-./scripts/install_launchd.sh
+./scripts/launchd_install.sh
 ```
 
-The script detects Python 3.11, shows all paths for confirmation, generates the plist, and activates the agent. The script then runs every hour automatically.
+The agent runs the scheduler every hour automatically.
 
 ```bash
 launchctl kickstart -k gui/$(id -u)/com.tado-planning  # force immediate run
 launchctl list | grep tado                              # check agent status
-tail -f logs/tado.log logs/tado_error.log              # follow logs
-./scripts/uninstall_launchd.sh                         # remove agent
+./scripts/launchd_uninstall.sh                         # remove agent
 ```
 
 ---
 
-## Schedule file format
+## Web configurator
 
-### planning_standard.json
+The web configurator manages all schedule data through a browser UI. It is available:
+
+- **Home Assistant**: as a panel in the HA sidebar (ingress, no port needed), or at `http://ha2.local:8099`
+- **macOS**: on demand via `./tado_planning/run.sh --cfg` at `http://localhost:8080`
+
+### Sections
+
+| Section | Description |
+|---------|-------------|
+| **Status** | Current resolved configuration per zone and per level, active planning, 14-day timeline |
+| **Weekconfigs** | Create, edit, copy, rename, delete zone configuration profiles |
+| **Plannings** | Create, edit, copy, rename, delete plannings (standard + exceptions) |
+| **Settings** | Scheduler loop interval, default zone template for new weekconfigs |
+| **Logs** | Live log viewer with colour-coded entries, auto-refresh, manual clear |
+
+The Status section also has a **▶ Run now** button to trigger the scheduler immediately, whether or not the loop is running.
+
+---
+
+## Data file format
+
+All schedule data lives in two files in the `schedules/` directory, managed by the web configurator.
+
+### `plannings.json`
+
+A JSON array of planning objects.
 
 ```json
-{
-  "_comment1": "2-week cycle: odd and even ISO weeks",
-  "events": [
-    { "day": "friday",  "time": "18:00", "week": "odd",  "level": 1, "config": "kidsabsent"  },
-    { "day": "friday",  "time": "15:00", "week": "even", "level": 1, "config": "kidspresent" },
-    { "day": "tuesday", "time": "06:30", "week": "even", "level": 2, "config": "away_18deg"  },
-    { "day": "tuesday", "time": "11:30", "week": "even", "level": 2, "config": "away_15deg"  }
-  ]
-}
+[
+  {
+    "name":   "standard",
+    "cycle":  "two-weeks-iso",
+    "start":  null,
+    "end":    null,
+    "events": [
+      { "day": "friday",  "time": "18:00", "week": "odd",  "level": 1, "config": "kidsabsent"  },
+      { "day": "friday",  "time": "15:00", "week": "even", "level": 1, "config": "kidspresent" },
+      { "day": "tuesday", "time": "06:30", "week": "even", "level": 2, "config": "away_18deg"  },
+      { "day": "tuesday", "time": "11:30", "week": "even", "level": 2, "config": "away_15deg"  }
+    ]
+  },
+  {
+    "name":     "easter2026",
+    "cycle":    "one-week",
+    "start":    "2026-04-05 00:00",
+    "end":      "2026-04-19 00:00",
+    "events": [
+      { "day": "sunday", "time": "00:00", "week": "both", "level": 1, "config": "vacancewithkids" }
+    ]
+  }
+]
 ```
+
+**Planning fields:**
+
+| Field | Values | Description |
+|-------|--------|-------------|
+| `name` | string | Unique identifier |
+| `cycle` | `one-week`, `two-weeks-iso`, `two-weeks-seq` | Cycle type |
+| `ref_date` | `YYYY-MM-DD` | Required for `two-weeks-seq` — defines week 1 |
+| `start` | `YYYY-MM-DD HH:MM` or `null` | Exception start (null = no start bound) |
+| `end` | `YYYY-MM-DD HH:MM` or `null` | Exception end (null = no end bound) |
+| `events` | array | List of schedule switch events |
+
+**Event fields:**
 
 | Field | Values | Description |
 |-------|--------|-------------|
 | `day` | `monday` … `sunday` | Day the configuration switches |
 | `time` | `HH:MM` | Time the configuration switches |
-| `week` | `odd`, `even`, `both` | ISO week parity |
+| `week` | `odd`, `even`, `both` | ISO week parity (ignored for `one-week` cycle) |
 | `level` | `1`, `2` | Configuration level |
-| `config` | filename without `.json` | Weekconfig to apply |
+| `config` | weekconfig name | Weekconfig to apply at this event |
 
-### Exception planning files
+**Conflict rules** (enforced at validation):
+- Exactly one planning with `start: null` and `end: null` (the standard)
+- No two plannings with identical `(start, end)` pair
+
+---
+
+### `weekconfigs.json`
+
+A JSON object keyed by configuration name. Each value is an object keyed by zone name.
 
 ```json
 {
-  "_description": "Easter holidays 2026",
-  "period": {
-    "start": "2026-04-05 00:00",
-    "end":   "2026-04-19 23:59"
+  "kidspresent": {
+    "living_room": {
+      "timetable":    "Mon-Fri, Sat, Sun",
+      "Mon-Fri":      [{ "start": "00:00", "temp": 15 }, { "start": "07:00", "temp": 20 }, { "start": "22:30", "temp": 15 }],
+      "Sat":          [{ "start": "00:00", "temp": 15 }, { "start": "08:00", "temp": 20 }, { "start": "23:00", "temp": 15 }],
+      "Sun":          [{ "start": "00:00", "temp": 15 }, { "start": "08:00", "temp": 20 }, { "start": "22:00", "temp": 15 }],
+      "away_temp":    15.0,
+      "away_enabled": true,
+      "preheat":      "ECO",
+      "early_start":  true
+    }
   },
-  "events": [
-    { "level": 1, "config": "vacancewithkids", "week": "both", "day": "monday", "time": "00:00" }
-  ]
-}
-```
-
-All `planning_*.json` files other than `planning_standard.json` are treated as exceptions. When the current date/time falls within `period`, the exception takes precedence.
-
-### Weekconfig files
-
-```json
-{
-  "living_room": {
-    "timetable": "THREE_DAY",
-    "week": [
-      { "start": "00:00", "temp": 15 },
-      { "start": "07:00", "temp": 20 },
-      { "start": "22:30", "temp": 15 }
-    ],
-    "weekend": [
-      { "start": "00:00", "temp": 15 },
-      { "start": "08:00", "temp": 20 },
-      { "start": "23:00", "temp": 15 }
-    ],
-    "away_temp": 15.0,
-    "away_enabled": true,
-    "preheat": "ECO",
-    "early_start": true
+  "away_15deg": {
+    "living_room": { "away_temp": 15.0, "away_enabled": true },
+    "bedroom":     { "away_temp": 15.0, "away_enabled": true }
   }
 }
 ```
 
-Zone names must match your Tado zone names (lowercased, spaces → underscores). Run `list_zones.sh` to get exact names.
+Zone names must match your Tado zone names exactly. Run `./scripts/list_zones.sh` to get them.
 
 **Timetable types:**
 
-| Value | Description |
-|-------|-------------|
-| `ONE_DAY` | Same schedule every day |
-| `THREE_DAY` | Weekdays (`MONDAY_TO_FRIDAY`) + Saturday + Sunday |
-| `SEVEN_DAY` | One schedule per day — use `"monday": [...]`, `"tuesday": [...]`, etc. |
+| Value | Day keys required | Description |
+|-------|-------------------|-------------|
+| `Mon-Sun` | `Mon-Sun` | Same schedule every day |
+| `Mon-Fri, Sat, Sun` | `Mon-Fri`, `Sat`, `Sun` | Weekdays + Saturday + Sunday |
+| `Mon, ..., Sun` | `Mon`, `Tue`, `Wed`, `Thu`, `Fri`, `Sat`, `Sun` | One schedule per day |
 
-**Optional fields:**
+**Zone config fields** (all optional except `timetable` when setting time slots):
 
-| Field | Description |
-|-------|-------------|
-| `weekend` | Weekend slots — if absent, `week` applies on weekends too |
-| `away_temp` | Minimum temperature in Tado away mode (°C) |
-| `away_enabled` | `true` / `false` — enables or disables away mode |
-| `preheat` | `off`, `ECO`, `BALANCE`, `COMFORT` |
-| `early_start` | `true` / `false` — Tado early start feature |
+| Field | Type | Description |
+|-------|------|-------------|
+| `timetable` | string | Timetable type — required if defining time slots |
+| `Mon-Sun` / `Mon-Fri` / etc. | array | Time blocks: `[{ "start": "HH:MM", "temp": N }, ...]` |
+| `away_temp` | number | Minimum temperature in away mode (°C) |
+| `away_enabled` | boolean | Enable or disable Tado away mode |
+| `preheat` | `off`, `ECO`, `BALANCE`, `COMFORT` | Tado preheat setting |
+| `early_start` | boolean | Tado early start feature |
+
+A weekconfig that only sets `away_temp` / `away_enabled` (like `away_15deg`) does not need a `timetable` — it will only touch those specific settings on Tado.
 
 ---
 
 ## Manual runs and testing
 
-`run.sh` can be called directly on both platforms for manual runs and testing, without starting the scheduler.
-
 ```bash
-./run.sh                        # run with current date, verbosity 0
-./run.sh -vv                    # run with verbosity 2
-./run.sh -d 2026-04-10 -vv      # simulate a specific date
-./run.sh -p schedules/planning_paques2026.json  # test a specific planning file
-./run.sh -c schedules/vacancewithkids.json      # force a specific weekconfig (level 1 only)
+./tado_planning/run.sh                     # single run, current date, verbosity 0
+./tado_planning/run.sh -vv                 # verbosity 2
+./tado_planning/run.sh -d 2026-04-10 -vv  # simulate a specific date
+./tado_planning/run.sh --cfg               # start web configurator only
 ```
-
-On **HA SSH**, `run.sh` automatically delegates to the container — no need to use `docker exec` manually. If the container is not running, it starts the add-on first.
-
-> On HA, `run.sh` runs inside the deployed container. If you have modified `run.sh` locally without deploying, it will warn you and ask for confirmation before proceeding.
 
 ---
 
 ## Verbosity levels
 
-For **manual runs**, use flags:
-
 | Flag | What is shown |
 |------|---------------|
-| *(none)* | ISO week, active configs, connection status, result |
-| `-v` | + Content of active configs (zones, slots, away, early start) |
-| `-vv` | + All cycle candidates with active marker and wrap-around info |
+| *(none)* | ISO week, active planning, active configs, result summary |
+| `-v` | + Weekconfig zone details (slots, away, preheat) |
+| `-vv` | + Cycle candidates with selection trace and wrap-around info |
 | `-vvv` | + API blocks sent to Tado (start → end : temp) |
 | `-vvvv` | + Raw PUT/GET requests with payload and response |
 
-For **scheduled runs**:
-- **On HA**: add-on **Configuration** tab → `verbosity` field (0–4)
-- **On macOS**: use manual runs with flags to diagnose — scheduled runs always run at verbosity 0
+For **scheduled runs on HA**: set `verbosity` in the add-on **Configuration** tab (0–4).  
+For **macOS launchd**: scheduled runs always run at verbosity 0 — use manual runs to diagnose.
 
 ---
 
@@ -429,22 +466,22 @@ For **scheduled runs**:
 
 ### Home Assistant
 
-When a new version is available, HA shows an **Update** button on the add-on page. Click it — HA pulls the new version from GitHub and rebuilds the image automatically.
+When a new version is available, HA shows an **Update** button on the add-on page. Click it — HA pulls the new version from GitHub and rebuilds the image.
 
-To force an immediate update without waiting for store detection:
+To force an immediate rebuild without waiting for store detection:
 
 ```bash
-./scripts/fetch.sh
-./scripts/ha_deploy.sh
+./scripts/git_fetch.sh
+# rebuild from HA UI or restart the add-on
 ```
 
 ### macOS
 
 ```bash
-./scripts/fetch.sh
+./scripts/git_fetch.sh
 ```
 
-The launchd agent picks up the updated script at the next scheduled run automatically.
+The launchd agent picks up the updated scripts at the next scheduled run automatically.
 
 ---
 
@@ -453,12 +490,12 @@ The launchd agent picks up the updated script at the next scheduled run automati
 | Symptom | Action |
 |---------|--------|
 | Token missing or expired | Run `./scripts/list_zones.sh` — OAuth flow restarts automatically |
-| Wrong configuration applied | `./run.sh -d YYYY-MM-DD -vv` to simulate the date and inspect selection |
-| Zone names not matching | Run `./scripts/list_zones.sh` and compare with weekconfig file keys |
-| Schedules not applied | Check logs for errors; verify JSON syntax in config files |
-| launchd agent not running (Mac) | `launchctl list \| grep tado` — re-run `install_launchd.sh` if missing |
-| HA add-on crash on start | `./run.sh -vv` from SSH for full output |
-| run.sh warns about version mismatch | Run `./scripts/ha_deploy.sh` then retry |
+| Wrong configuration applied | `./tado_planning/run.sh -d YYYY-MM-DD -vv` to simulate and inspect |
+| Zone names not matching | Run `./scripts/list_zones.sh` and compare with weekconfig zone keys |
+| Schedules not applied | Check logs in web UI or with `-vv`; verify JSON in the configurator |
+| launchd agent not running (Mac) | `launchctl list \| grep tado` — re-run `launchd_install.sh` if missing |
+| HA add-on crash on start | `./tado_planning/run.sh -vv` from HA SSH for full output |
+| Web UI stuck on spinner | Check browser console for JS errors; verify Flask is running on the expected port |
 
 ---
 
@@ -466,136 +503,117 @@ The launchd agent picks up the updated script at the next scheduled run automati
 
 ### Architecture
 
-#### Core script — `tado_planning.py`
+#### Scheduler — `tado-planning-run.py`
 
-The main script runs identically on macOS and Home Assistant. Platform differences are handled at runtime via `platform.system()`. Environment variables override all default paths:
+Reads `plannings.json` and `weekconfigs.json`, resolves the active configuration for each zone and level at the current time, and pushes only the zones that differ from Tado's current state.
+
+Environment variables override default paths:
 
 | Variable | Default (macOS) | Default (HAOS) |
 |----------|-----------------|----------------|
-| `TADO_TOKEN_FILE` | `<project>/tado_refresh_token` | `/data/tado_refresh_token` |
-| `TADO_SCHEDULES_DIR` | `<project>/schedules` | `/config/tado-planning/schedules` |
+| `TADO_TOKEN_FILE` | `tado_planning/tado_refresh_token` | `/config/tado-planning/tado_refresh_token` |
+| `TADO_SCHEDULES_DIR` | `tado_planning/schedules` | `/config/tado-planning/schedules` |
 
-`run.sh` sets these variables before calling `tado_planning.py`, so direct Python calls and `run.sh` calls are fully equivalent.
+`run.sh` sets these before calling the Python script, so direct Python calls and `run.sh` calls are equivalent.
 
-#### Selection logic in detail
+#### Web configurator — `tado-planning-cfg.py`
 
-1. Load `planning_standard.json` from `TADO_SCHEDULES_DIR`
-2. Scan all other `planning_*.json` files for active exception periods
-3. If an exception covers the current date/time, its events override the standard planning for the affected level(s)
-4. For each level, build the two-week cycle (odd + even weeks), find the last past event, apply wrap-around if needed
-5. Load the corresponding weekconfig(s) and compare zone by zone with what is currently set on Tado
-6. Push only the zones that have actually changed
+Flask app serving a single-page UI. Exposes a REST API (`/api/*`) consumed by the frontend. In `--loop` mode (HA container), it runs as a background process alongside the scheduler loop. In `--cfg` mode (standalone), it runs alone.
 
-#### Two-level config system
+On macOS, it opens the browser automatically and binds to `127.0.0.1:8080`. On HA, it binds to `0.0.0.0:8099` with ingress support.
 
-Level 1 and level 2 are resolved independently. They can cover completely different zones (fully independent) or the same zones (level 2 applied on top of level 1). The script does not "stack" configs — it compares the final desired state against Tado's current state and only pushes differences.
+#### `run.sh`
+
+Universal entry point that auto-detects the deployment context:
+
+| Context | Where | Conflict check |
+|---------|-------|----------------|
+| `mac-launchd` | macOS, started by launchd | None (launchd serialises) |
+| `mac-shell` | macOS, interactive shell | Rejects if launchd agent loaded |
+| `ha-shell` | HA Linux SSH | Rejects if any container running |
+| `ha-docker-prod` | Inside prod HA container | Rejects if test container running |
+| `ha-docker-test` | Inside test container | Rejects if prod container running |
+
+Modes:
+
+| Flag | Behaviour |
+|------|-----------|
+| *(none)* | Single scheduler run, then exit |
+| `--loop` | Scheduler loop + Flask configurator (container only) |
+| `--cfg` | Flask configurator only |
 
 #### Token management
 
-Authentication uses Tado's OAuth2 device flow via `PyTado` (≥ 0.18). On first run, a URL is printed for the user to authorize in a browser. The refresh token is persisted to disk and reused. If missing or expired, the flow restarts automatically.
+Authentication uses Tado's OAuth2 device flow via `PyTado` (≥ 0.18). On first run, a URL is printed for the user to authorize in a browser. The refresh token is persisted to disk and reused on every subsequent run. If missing or expired, the flow restarts automatically.
 
 #### HA add-on container
 
 - Base image: `ghcr.io/home-assistant/aarch64-base` (aarch64, ODROID N2+)
-- Entrypoint: `CMD ["/run.sh", "--loop"]` in the Dockerfile
-- `run.sh --loop` reads verbosity from `/data/options.json`, initializes schedules if absent, then runs `tado_planning.py` in an hourly loop aligned to the clock hour
-- `run.sh` without `--loop` = single run (manual/test mode)
-- On HA SSH (outside the container), `run.sh` detects the Linux context and delegates automatically via `docker exec`, starting the container first if needed. It also checks that the deployed `run.sh` matches the local version before proceeding.
+- Entrypoint: `CMD ["/run.sh", "--loop"]`
+- `--loop` reads `verbosity` from `/data/options.json`, runs the scheduler on the configured interval (default 60 min, aligned to clock hour), and keeps Flask running in parallel
+- A `loop_trigger` file in the schedules directory causes an immediate scheduler run (used by the **▶ Run now** button in the UI)
+- Loop state is written to `loop_status.json` (PID, last run, next run)
 
 ---
 
 ### Scripts reference
 
-All scripts live in `scripts/` and auto-detect the project root (one level up).
-
-#### `run.sh` (project root, not in scripts/)
-
-Universal entrypoint. Handles all three contexts automatically.
+#### `tado_planning/run.sh`
 
 ```bash
-./run.sh                            # single run, verbosity 0
-./run.sh --loop                     # hourly loop (Dockerfile only)
-./run.sh -vv                        # single run, verbosity 2
-./run.sh -d 2026-04-10 -vv          # simulate a specific date
-./run.sh -p planning_paques2026.json  # test a specific planning file
-./run.sh -c vacancewithkids.json    # force a weekconfig (level 1 only)
+./tado_planning/run.sh                     # single run
+./tado_planning/run.sh --loop             # scheduler loop + configurator (container only)
+./tado_planning/run.sh --cfg              # web configurator only
+./tado_planning/run.sh -vv                # single run, verbosity 2
+./tado_planning/run.sh -d 2026-04-10 -vv # simulate a specific date
 ```
-
-On HA SSH, all arguments are forwarded transparently to the container.
-
-#### `scripts/fetch.sh`
-
-Pulls from GitHub and syncs `.gitignore → gitignore`. Universal (Mac + HA SSH).
-
-```bash
-./scripts/fetch.sh
-```
-
-#### `scripts/push.sh`
-
-Commits and pushes to GitHub. Universal (Mac + HA SSH).
-
-```bash
-./scripts/push.sh "commit message"          # push, version unchanged
-./scripts/push.sh --bump "commit message"   # bump patch version, then push
-```
-
-`--bump` reads the current version from GitHub (`git show origin/main:config.json`), increments the patch number, and writes it back to `config.json` before committing. This ensures the version is always based on the remote state, avoiding conflicts when pushing from multiple machines.
-
-#### `scripts/ha_deploy.sh`
-
-Rebuilds the Docker image and restarts the add-on. HA SSH only.
-
-```bash
-./scripts/ha_deploy.sh
-```
-
-Cleans old images, rebuilds with `--no-cache` (required due to HAOS overlay filesystem), restarts the add-on, and tails the last 20 log lines.
-
-Use this after `fetch.sh` when you want HA to pick up changes immediately without waiting for the store to detect the new version.
 
 #### `scripts/list_zones.sh`
 
-Lists all Tado zones with their names, IDs, and types. Authenticates if needed. On HA SSH, executes inside the container automatically. Universal (Mac + HA SSH).
+Lists all Tado zones with names, IDs, and types. Triggers OAuth on first run.
 
-#### `scripts/install_launchd.sh` / `uninstall_launchd.sh`
+#### `scripts/git_fetch.sh` / `scripts/git_push.sh`
 
-macOS only. Installs or removes the launchd agent that runs `run.sh` every hour.
+Pull from / push to GitHub. Used to sync code between Mac and HA.
+
+#### `scripts/launchd_install.sh` / `scripts/launchd_uninstall.sh`
+
+macOS only. Installs or removes the launchd agent (`com.tado-planning`) that runs the scheduler hourly.
+
+#### `scripts/docker_test_build.sh` / `docker_test_start.sh` / `docker_test_stop.sh` / `docker_test_remove.sh`
+
+Build, start, stop, and remove a local test container (`addon_test_tado_planning`). Used to test Docker builds without touching the production add-on. `docker_test_start.sh` forwards all arguments to `run.sh` inside the container.
 
 ---
 
 ### Development workflow
 
-#### Working on HA
+#### On macOS
 
 ```bash
-# Edit files on HA or via Samba
-./run.sh -vv                        # test manually
-./scripts/push.sh --bump "fix: ..." # push with version bump
-# HA store will detect new version, or:
-./scripts/ha_deploy.sh              # force immediate rebuild
+./tado_planning/run.sh --cfg              # edit schedules via web UI
+./tado_planning/run.sh -vv               # test the scheduler
+./scripts/git_push.sh "fix: description" # push to GitHub
 ```
 
-#### Working on Mac
+#### On HA
+
+Code changes in `tado_planning/` require rebuilding the Docker image:
 
 ```bash
-# Edit files locally
-./run.sh -vv                        # test locally
-./scripts/push.sh --bump "fix: ..." # push with version bump
-# Then on HA SSH:
-./scripts/fetch.sh && ./scripts/ha_deploy.sh
+# From HA SSH:
+./scripts/git_fetch.sh
+# then restart the add-on from the HA UI (or via ha supervisor restart add-on)
 ```
 
-#### Quick test without deploy (HA)
-
-To test a modified `run.sh` without rebuilding the image:
+For a quick test without rebuilding:
 
 ```bash
-docker cp run.sh addon_fc4e2b3e_tado_planning:/run.sh
-./run.sh -vv
+docker cp tado_planning/tado-planning-run.py addon_fc4e2b3e_tado_planning:/tado-planning-run.py
+./tado_planning/run.sh -vv
 ```
 
-This change is temporary — it will be overwritten at the next deploy.
+This change is temporary — it will be overwritten at the next rebuild.
 
 ---
 
@@ -603,30 +621,13 @@ This change is temporary — it will be overwritten at the next deploy.
 
 The version in `config.json` follows `MAJOR.MINOR.PATCH`:
 
-| Change type | Version bump | How |
-|------------|--------------|-----|
-| Any fix, improvement, new file | Patch: `1.0.x → 1.0.x+1` | `push.sh --bump` |
-| New significant feature, backward compatible | Minor: `1.0.x → 1.1.0` | Edit `config.json` manually, then `push.sh` |
-| Breaking change, format change, migration required | Major: `1.x.x → 2.0.0` | Edit `config.json` manually, then `push.sh` |
+| Change type | Bump |
+|------------|------|
+| Bug fix, small improvement | Patch: `1.1.x → 1.1.x+1` |
+| New feature, backward compatible | Minor: `1.x.x → 1.x+1.0` |
+| Breaking change, data migration required | Major: `x.x.x → x+1.0.0` |
 
-For minor/major bumps, edit `config.json` manually first:
-
-```bash
-jq '.version = "1.1.0"' config.json > config.json.tmp && mv config.json.tmp config.json
-./scripts/push.sh "release: v1.1.0 — description"
-```
-
-The version is used by the HA store to detect available updates. A bump is only required when you want HA to propose an update — for development iterations you can push without bumping and use `ha_deploy.sh` to force a rebuild.
-
----
-
-### Adding a new schedule config
-
-1. Create `schedules/myconfig.json` with the zones and slots you want
-2. Reference it in `planning_standard.json` with `"config": "myconfig"`
-3. For a level 2 config, only define the zones you want to override
-4. Test: `./run.sh -c myconfig.json` or `./run.sh -d YYYY-MM-DD -vvv`
-5. Push and deploy
+The version is used by the HA store to detect available updates.
 
 ---
 
@@ -634,12 +635,13 @@ The version is used by the HA store to detect available updates. A bump is only 
 
 | Issue | Details |
 |-------|---------|
-| PyTado enum comparisons | Zone type comparisons require `.value`; patched in `tado_planning.py` |
+| PyTado enum comparisons | Zone type comparisons require `.value`; patched in `tado-planning-run.py` |
 | OAuth URL trailing slash | PyTado ≥ 0.18 requires trailing slash on token URL; patched |
 | Token file format | Must be `{"refresh_token": "..."}` JSON, not plain text |
-| HAOS overlay filesystem | `docker build --no-cache` required in `ha_deploy.sh` to avoid stale layers |
-| launchd env isolation | launchd agents don't inherit shell env vars; all paths declared explicitly in the plist via `EnvironmentVariables` |
-| `run.sh` in container | `run.sh` is baked into the Docker image at build time. Changes to `run.sh` require `ha_deploy.sh` to take effect. Use `docker cp` for quick tests. |
+| HAOS overlay filesystem | `docker build --no-cache` required to avoid stale layers |
+| launchd env isolation | launchd agents don't inherit shell env vars; all paths declared explicitly in the plist |
+| `run.sh` baked in image | Changes to `run.sh` require a container rebuild. Use `docker cp` for quick tests. |
+| `settings.json` not in git | Created on first save in the UI. Defaults: `loop_interval: 60`, `default_zone` template hardcoded in the UI. |
 
 ---
 
