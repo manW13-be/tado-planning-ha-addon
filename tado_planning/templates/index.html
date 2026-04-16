@@ -1799,8 +1799,6 @@ async function loadLogs() {
       meta.textContent = "";
       return;
     }
-    const content = data.lines.join("
-");
     // Colorise lines by tag
     out.innerHTML = data.lines.map(line => {
       let color = "";
@@ -1815,8 +1813,7 @@ async function loadLogs() {
       else if (/\[VERIFY\]/.test(line))      color = "color:#f59e0b";
       const escaped = line.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
       return color ? `<span style="${color}">${escaped}</span>` : escaped;
-    }).join("
-");
+    }).join("\n");
     meta.textContent = `${data.total} total lines · showing last ${data.lines.length}`;
     // Auto-scroll to bottom
     if (document.getElementById("log-autoscroll")?.checked) {
