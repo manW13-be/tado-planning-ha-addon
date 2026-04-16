@@ -65,7 +65,13 @@ fi
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-log()  { echo "[TADO] $(date '+%d/%m/%Y %H:%M:%S') — $*"; }
+log()  {
+    local msg="[TADO] $(date '+%d/%m/%Y %H:%M:%S') — $*"
+    echo "$msg"
+    if [ -n "${LOG_FILE:-}" ]; then
+        echo "$msg" >> "$LOG_FILE" 2>/dev/null || true
+    fi
+}
 die()  { echo "[TADO] ERROR: $*" >&2; exit 1; }
 container_running() { docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${1}$"; }
 
@@ -214,12 +220,31 @@ init_schedules() {
 # Next run time (portable Mac + Linux)
 # ---------------------------------------------------------------------------
 next_run_time() {
-    local NEXT=$(( 3600 - $(date +%s) % 3600 ))
+    local INTERVAL_SEC="${1:-3600}"
+    local NEXT=$(( INTERVAL_SEC - $(date +%s) % INTERVAL_SEC ))
     if [ "$(uname)" = "Darwin" ]; then
         date -v+${NEXT}S '+%d/%m/%Y %H:%M:%S'
     else
         date -d "+${NEXT} seconds" '+%d/%m/%Y %H:%M:%S'
     fi
+}
+
+read_loop_interval() {
+    # Read loop_interval (minutes) from settings.json, fallback to 60
+    local SETTINGS="${SCHEDULES_DIR}/settings.json"
+    local MINUTES=60
+    if [ -f "$SETTINGS" ]; then
+        MINUTES=$(python3 -c "
+import json, sys
+try:
+    d = json.load(open('${SETTINGS}'))
+    v = int(d.get('loop_interval', 60))
+    print(max(1, v))
+except Exception:
+    print(60)
+" 2>/dev/null || echo 60)
+    fi
+    echo $(( MINUTES * 60 ))
 }
 
 # ---------------------------------------------------------------------------
@@ -252,6 +277,55 @@ log "Schedules: $SCHEDULES_DIR"
 log "Token    : $TOKEN_FILE"
 
 # ---------------------------------------------------------------------------
+# Loop control files (in schedules dir)
+# ---------------------------------------------------------------------------
+LOOP_STATUS_FILE=""
+LOOP_TRIGGER_FILE=""
+LOG_FILE=""
+
+set_loop_files() {
+    LOOP_STATUS_FILE="${SCHEDULES_DIR}/loop_status.json"
+    LOOP_TRIGGER_FILE="${SCHEDULES_DIR}/loop_trigger"
+    LOG_FILE="${SCHEDULES_DIR}/tado-planning.log"
+}
+
+rotate_log() {
+    # Keep last 500KB — rename to .log.1 if exceeded
+    local MAX=512000
+    if [ -f "$LOG_FILE" ] && [ "$(wc -c < "$LOG_FILE")" -gt $MAX ]; then
+        mv "$LOG_FILE" "${LOG_FILE}.1"
+    fi
+}
+
+tee_log() {
+    # Tee stdin to LOG_FILE (append) and pass through to stdout
+    rotate_log
+    tee -a "$LOG_FILE"
+}
+
+write_loop_status() {
+    local interval_sec="$1"
+    local next_ts="$2"
+    cat > "$LOOP_STATUS_FILE" << JSON
+{
+  "pid": $$,
+  "interval_sec": ${interval_sec},
+  "interval_min": $(( interval_sec / 60 )),
+  "last_run": "$(date '+%Y-%m-%d %H:%M:%S')",
+  "next_run": "${next_ts}"
+}
+JSON
+}
+
+check_trigger() {
+    if [ -f "$LOOP_TRIGGER_FILE" ]; then
+        rm -f "$LOOP_TRIGGER_FILE"
+        return 0  # trigger found
+    fi
+    return 1
+}
+
+# ---------------------------------------------------------------------------
 # Dispatch
 # ---------------------------------------------------------------------------
 
@@ -275,15 +349,37 @@ if [ "$LOOP" = true ]; then
     $PYTHON "$CFG_SCRIPT" --host "$CFG_HOST" --port "$CFG_PORT" --no-browser &
     CFG_PID=$!
 
+    set_loop_files
+    trap 'rm -f "$LOOP_STATUS_FILE" "$LOOP_TRIGGER_FILE"; exit' INT TERM EXIT
     log "Starting scheduler loop..."
     while true; do
-        log "Running scheduler..."
+        LOOP_INTERVAL_SEC=$(read_loop_interval)
+        LOOP_INTERVAL_MIN=$(( LOOP_INTERVAL_SEC / 60 ))
+        log "Running scheduler (interval: ${LOOP_INTERVAL_MIN}min)..."
         TADO_SCHEDULES_DIR="$SCHEDULES_DIR" \
         TADO_TOKEN_FILE="$TOKEN_FILE" \
         $PYTHON "$PLANNING_SCRIPT" ${PYTHON_ARGS[@]+"${PYTHON_ARGS[@]}"} 2>&1 \
-            || log "Scheduler exited with error $?"
-        log "Next run at $(next_run_time)"
-        sleep $(( 3600 - $(date +%s) % 3600 ))
+            | tee_log || true
+        # Re-read interval after run (may have changed via settings)
+        LOOP_INTERVAL_SEC=$(read_loop_interval)
+        SLEEP_SEC=$(( LOOP_INTERVAL_SEC - $(date +%s) % LOOP_INTERVAL_SEC ))
+        NEXT_RUN_TS=$(next_run_time "$LOOP_INTERVAL_SEC")
+        log "Next run at ${NEXT_RUN_TS} (in ${SLEEP_SEC}s)"
+        write_loop_status "$LOOP_INTERVAL_SEC" "$NEXT_RUN_TS"
+        # Sleep in 5s increments to stay responsive to trigger
+        SLEPT=0
+        while [ $SLEPT -lt $SLEEP_SEC ]; do
+            if check_trigger; then
+                log "Manual trigger received — running scheduler immediately"
+                break
+            fi
+            CHUNK=5
+            if [ $(( SLEEP_SEC - SLEPT )) -lt $CHUNK ]; then
+                CHUNK=$(( SLEEP_SEC - SLEPT ))
+            fi
+            sleep $CHUNK
+            SLEPT=$(( SLEPT + CHUNK ))
+        done
     done
 
 elif [ "$RUN_CFG" = true ]; then
@@ -292,6 +388,7 @@ elif [ "$RUN_CFG" = true ]; then
     # -------------------------------------------------------------------------
     log "Mode: cfg"
     init_schedules
+    LOG_FILE="${SCHEDULES_DIR}/tado-planning.log"
     CFG_URL=$(get_cfg_url)
     log "Configurator on ${CFG_HOST}:${CFG_PORT} — $CFG_URL"
     TADO_SCHEDULES_DIR="$SCHEDULES_DIR" \
@@ -305,8 +402,10 @@ else
     # -------------------------------------------------------------------------
     log "Mode: run"
     init_schedules
+    LOG_FILE="${SCHEDULES_DIR}/tado-planning.log"
+    rotate_log
     TADO_SCHEDULES_DIR="$SCHEDULES_DIR" \
     TADO_TOKEN_FILE="$TOKEN_FILE" \
-    $PYTHON "$PLANNING_SCRIPT" ${PYTHON_ARGS[@]+"${PYTHON_ARGS[@]}"}
+    $PYTHON "$PLANNING_SCRIPT" ${PYTHON_ARGS[@]+"${PYTHON_ARGS[@]}"} 2>&1 | tee -a "$LOG_FILE"
 
 fi
