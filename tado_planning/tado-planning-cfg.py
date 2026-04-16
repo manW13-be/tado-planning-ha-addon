@@ -19,6 +19,8 @@ import copy
 import argparse
 import platform
 import datetime
+import subprocess
+import threading
 import threading
 import webbrowser
 import time
@@ -43,6 +45,15 @@ DATA_DIR   = os.environ.get("TADO_SCHEDULES_DIR", _DEFAULT_DATA_DIR)
 
 PLANNINGS_FILE   = os.path.join(DATA_DIR, "plannings.json")
 WEEKCONFIGS_FILE = os.path.join(DATA_DIR, "weekconfigs.json")
+SETTINGS_FILE    = os.path.join(DATA_DIR, "settings.json")
+LOOP_STATUS_FILE  = os.path.join(DATA_DIR, "loop_status.json")
+LOOP_TRIGGER_FILE = os.path.join(DATA_DIR, "loop_trigger")
+LOG_FILE          = os.path.join(DATA_DIR, "tado-planning.log")
+LOG_FILE_PREV     = os.path.join(DATA_DIR, "tado-planning.log.1")
+
+# Planning script path — same directory as this file
+_SCRIPT_DIR     = os.path.dirname(os.path.abspath(__file__))
+PLANNING_SCRIPT = os.path.join(_SCRIPT_DIR, "tado-planning-run.py")
 
 # ---------------------------------------------------------------------------
 # FLASK APP
@@ -84,6 +95,19 @@ def load_plannings() -> list:
 def save_plannings(data: list):
     _ensure_data_dir()
     with open(PLANNINGS_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+
+
+def load_settings() -> dict:
+    if not os.path.exists(SETTINGS_FILE):
+        return {"loop_interval": 60, "default_zone": None}
+    with open(SETTINGS_FILE, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def save_settings(data: dict):
+    _ensure_data_dir()
+    with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
 
 
@@ -263,11 +287,15 @@ def _active_plannings_at(plannings: list, t: datetime.datetime) -> list:
 
 def _resolve_config_for_zone(zone: str, level: int,
                               plannings_by_precedence: list,
-                              t: datetime.datetime) -> tuple[str | None, str | None]:
+                              t: datetime.datetime,
+                              weekconfigs: dict | None = None) -> tuple[str | None, str | None]:
     """
     Return (config_name, planning_name) for a zone+level at time t.
     Iterates plannings by precedence, returns the first that covers this zone+level.
+    Pass weekconfigs to avoid repeated disk reads in tight loops.
     """
+    if weekconfigs is None:
+        weekconfigs = load_weekconfigs()
     monday = (t - datetime.timedelta(days=t.weekday())).replace(
         hour=0, minute=0, second=0, microsecond=0)
 
@@ -326,7 +354,6 @@ def _resolve_config_for_zone(zone: str, level: int,
             _, cfg = min(candidates, key=lambda x: x[0])
 
         # Check if the resolved config covers this zone
-        weekconfigs = load_weekconfigs()
         if cfg in weekconfigs and zone in weekconfigs[cfg]:
             return cfg, planning.get("name")
 
@@ -420,8 +447,8 @@ def get_status() -> dict:
 
         zones_status = {}
         for zone in all_zones:
-            l1_cfg, l1_pl = _resolve_config_for_zone(zone, 1, active_pls, now)
-            l2_cfg, l2_pl = _resolve_config_for_zone(zone, 2, active_pls, now)
+            l1_cfg, l1_pl = _resolve_config_for_zone(zone, 1, active_pls, now, weekconfigs)
+            l2_cfg, l2_pl = _resolve_config_for_zone(zone, 2, active_pls, now, weekconfigs)
             if l1_cfg or l2_cfg:
                 zones_status[zone] = {
                     "l1": {"config": l1_cfg, "planning": l1_pl} if l1_cfg else None,
@@ -476,9 +503,11 @@ def get_timeline(days: int = 14) -> dict:
 
         # Expand events week by week
         for p in plannings:
-            cycle  = p.get("cycle", "two-weeks-iso")
-            events = [e for e in p.get("events", []) if isinstance(e, dict)]
-            scan   = now - datetime.timedelta(days=7)
+            cycle    = p.get("cycle", "two-weeks-iso")
+            events   = [e for e in p.get("events", []) if isinstance(e, dict)]
+            p_start  = _parse_dt(p.get("start"))
+            p_end    = _parse_dt(p.get("end"))
+            scan     = now - datetime.timedelta(days=7)
             while scan <= end + datetime.timedelta(days=7):
                 monday = (scan - datetime.timedelta(days=scan.weekday())).replace(
                     hour=0, minute=0, second=0, microsecond=0)
@@ -491,6 +520,11 @@ def get_timeline(days: int = 14) -> dict:
                         if week == "odd"  and parity != "odd":  continue
                         if week == "even" and parity != "even": continue
                     dt = monday + datetime.timedelta(days=d, hours=h, minutes=m)
+                    # Only add moment if the planning is active at that datetime
+                    if p_start and dt < p_start:
+                        continue
+                    if p_end and dt > p_end:
+                        continue
                     if now <= dt <= end:
                         moments.add(dt)
                 scan += datetime.timedelta(weeks=1)
@@ -516,16 +550,19 @@ def get_timeline(days: int = 14) -> dict:
         all_zones = _all_zones_from_weekconfigs(weekconfigs)
         zones_tl  = {}
 
+        # Pre-compute active_plannings per moment (not per zone×moment)
+        active_pls_per_t = [_active_plannings_at(plannings, t) for t in sorted_moments]
+
+        # Pre-compute (l1, l2) per zone per moment
         for zone in all_zones:
             l1_prev = l2_prev = None
             l1_row  = []
             l2_row  = []
             has_any = False
 
-            for t in sorted_moments:
-                active_pls = _active_plannings_at(plannings, t)
-                l1_cfg, l1_pl = _resolve_config_for_zone(zone, 1, active_pls, t)
-                l2_cfg, l2_pl = _resolve_config_for_zone(zone, 2, active_pls, t)
+            for t, active_pls in zip(sorted_moments, active_pls_per_t):
+                l1_cfg, l1_pl = _resolve_config_for_zone(zone, 1, active_pls, t, weekconfigs)
+                l2_cfg, l2_pl = _resolve_config_for_zone(zone, 2, active_pls, t, weekconfigs)
 
                 l1_entry = {"config": l1_cfg, "planning": l1_pl} if l1_cfg else None
                 l2_entry = {"config": l2_cfg, "planning": l2_pl} if l2_cfg else None
@@ -803,6 +840,166 @@ def api_planning_validate():
 
 
 # ---------------------------------------------------------------------------
+# API — LOGS
+# ---------------------------------------------------------------------------
+
+@app.route("/api/logs")
+def api_logs():
+    try:
+        lines = int(request.args.get("lines", 200))
+        lines = max(1, min(lines, 2000))
+        result = []
+        # Read from .log.1 first (older), then .log (newer)
+        for path in (LOG_FILE_PREV, LOG_FILE):
+            if os.path.exists(path):
+                with open(path, encoding="utf-8", errors="replace") as f:
+                    result.extend(f.readlines())
+        # Return last N lines
+        tail = result[-lines:] if len(result) > lines else result
+        return jsonify({
+            "lines": [l.rstrip("\n") for l in tail],
+            "total": len(result),
+            "has_log": os.path.exists(LOG_FILE),
+        })
+    except Exception as e:
+        return jsonify({"error": str(e), "lines": [], "total": 0, "has_log": False})
+
+
+@app.route("/api/logs/clear", methods=["POST"])
+def api_logs_clear():
+    try:
+        for path in (LOG_FILE, LOG_FILE_PREV):
+            if os.path.exists(path):
+                os.remove(path)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ---------------------------------------------------------------------------
+# API — LOOP STATUS & TRIGGER
+# ---------------------------------------------------------------------------
+
+@app.route("/api/loop-status")
+def api_loop_status():
+    if not os.path.exists(LOOP_STATUS_FILE):
+        return jsonify({"running": False})
+    try:
+        with open(LOOP_STATUS_FILE, encoding="utf-8") as f:
+            data = json.load(f)
+        # Check if the pid is still alive
+        pid = data.get("pid")
+        if pid:
+            try:
+                os.kill(pid, 0)
+            except (ProcessLookupError, PermissionError):
+                return jsonify({"running": False})
+        return jsonify({**data, "running": True})
+    except Exception as e:
+        return jsonify({"running": False, "error": str(e)})
+
+
+def _loop_is_alive() -> bool:
+    """Return True if a --loop process is currently running."""
+    if not os.path.exists(LOOP_STATUS_FILE):
+        return False
+    try:
+        with open(LOOP_STATUS_FILE, encoding="utf-8") as f:
+            pid = json.load(f).get("pid")
+        if pid:
+            os.kill(pid, 0)
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def _run_scheduler_subprocess():
+    """Run tado-planning-run.py in a background thread, tee output to log file."""
+    import sys
+    env = os.environ.copy()
+    env["TADO_SCHEDULES_DIR"] = DATA_DIR
+    env["TADO_TOKEN_FILE"]    = TOKEN_FILE
+    try:
+        _rotate_log()
+        proc = subprocess.Popen(
+            [sys.executable, PLANNING_SCRIPT],
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        with open(LOG_FILE, "a", encoding="utf-8") as lf:
+            for line in proc.stdout:
+                print(line, end="", flush=True)   # stdout → docker logs / terminal
+                lf.write(line)
+                lf.flush()
+        proc.wait(timeout=300)
+    except Exception as e:
+        print(f"[run-now] subprocess error: {e}", flush=True)
+
+
+def _rotate_log():
+    """Rotate log file if > 512KB."""
+    try:
+        if os.path.exists(LOG_FILE) and os.path.getsize(LOG_FILE) > 512_000:
+            if os.path.exists(LOG_FILE_PREV):
+                os.remove(LOG_FILE_PREV)
+            os.rename(LOG_FILE, LOG_FILE_PREV)
+    except Exception:
+        pass
+
+
+@app.route("/api/run-now", methods=["POST"])
+def api_run_now():
+    try:
+        if _loop_is_alive():
+            # Loop is running — use trigger file so it picks it up within 5s
+            _ensure_data_dir()
+            with open(LOOP_TRIGGER_FILE, "w") as f:
+                f.write(str(datetime.datetime.now()))
+            return jsonify({"ok": True, "mode": "trigger"})
+        else:
+            # Loop not running — fire subprocess directly from Flask
+            if not os.path.exists(PLANNING_SCRIPT):
+                return jsonify({"error": f"Planning script not found: {PLANNING_SCRIPT}"}), 500
+            t = threading.Thread(target=_run_scheduler_subprocess, daemon=True)
+            t.start()
+            return jsonify({"ok": True, "mode": "direct"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ---------------------------------------------------------------------------
+# API — SETTINGS
+# ---------------------------------------------------------------------------
+
+@app.route("/api/settings", methods=["GET"])
+def api_settings_get():
+    s = load_settings()
+    return jsonify(s)
+
+
+@app.route("/api/settings", methods=["POST"])
+def api_settings_save():
+    data = request.get_json()
+    if not isinstance(data, dict):
+        return jsonify({"error": "Invalid data"}), 400
+    # Validate loop_interval
+    interval = data.get("loop_interval")
+    if interval is not None:
+        try:
+            interval = int(interval)
+            if interval < 1:
+                raise ValueError
+        except (TypeError, ValueError):
+            return jsonify({"error": "loop_interval must be a positive integer (minutes)"}), 422
+        data["loop_interval"] = interval
+    save_settings(data)
+    return jsonify({"ok": True})
+
+
+# ---------------------------------------------------------------------------
 # MAIN
 # ---------------------------------------------------------------------------
 
@@ -827,7 +1024,7 @@ def main():
             webbrowser.open(url)
         threading.Thread(target=open_browser, daemon=True).start()
 
-    app.run(host=args.host, port=args.port, debug=False)
+    app.run(host=args.host, port=args.port, debug=False, threaded=True)
 
 
 if __name__ == "__main__":
