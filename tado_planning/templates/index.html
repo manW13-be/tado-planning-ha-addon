@@ -328,6 +328,14 @@ body { font-family: var(--font); background: var(--bg); color: var(--text);
     </svg>
     Logs
   </div>
+  <div class="nav-item" id="nav-service" data-section="service" onclick="showSection('service')" style="display:none">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+      <rect x="1" y="4" width="14" height="9" rx="1.5"/>
+      <path d="M5 4V3a3 3 0 0 1 6 0v1"/>
+      <circle cx="8" cy="8.5" r="1.5" fill="currentColor" stroke="none"/>
+    </svg>
+    Service
+  </div>
 </nav>
 
 <!-- MAIN -->
@@ -491,6 +499,35 @@ body { font-family: var(--font); background: var(--bg); color: var(--text);
     </div>
   </section>
 
+  <!-- SERVICE (macOS only) -->
+  <section id="sec-service" class="section">
+    <div class="section-header">
+      <h1>Service macOS</h1>
+    </div>
+    <div class="section-body" style="max-width:900px">
+      <div id="service-status-card" style="background:var(--surface);border:1px solid var(--border);
+        border-radius:var(--radius);padding:16px 20px;margin-bottom:20px">
+        <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;
+          letter-spacing:.08em;margin-bottom:8px">État du LaunchAgent</div>
+        <div id="service-status-text" style="font-size:15px;font-weight:600">—</div>
+        <div id="service-status-sub" style="font-size:12px;color:var(--muted);margin-top:4px"></div>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <button id="btn-service-action" class="btn btn-primary" onclick="serviceAction()" style="display:none"></button>
+        <span id="btn-service-confirm" style="display:none;gap:8px;align-items:center">
+          Confirmer ?
+          <button class="btn btn-danger btn-sm" onclick="serviceActionConfirmed()">Oui</button>
+          <button class="btn btn-secondary btn-sm" onclick="serviceActionCancelled()">Non</button>
+        </span>
+        <button class="btn btn-secondary" onclick="loadServiceStatus()">Rafraîchir</button>
+      </div>
+      <pre id="service-output" style="margin-top:20px;background:#1a1d23;color:#e2e4e9;
+        font-family:var(--mono);font-size:11px;line-height:1.6;padding:14px 16px;
+        border-radius:var(--radius);white-space:pre-wrap;word-break:break-all;
+        display:none;max-height:400px;overflow-y:auto;width:100%;max-width:900px"></pre>
+    </div>
+  </section>
+
 </main>
 
 <!-- TOAST -->
@@ -621,6 +658,7 @@ function showSection(id) {
   if (id === "plannings")   loadPlannings();
   if (id === "settings")    loadSettings();
   if (id === "logs")        { loadLogs(); _startLogsAutoRefresh(); }
+  if (id === "service")     loadServiceStatus();
   if (id !== "logs")        _stopLogsAutoRefresh();
 }
 
@@ -1871,7 +1909,80 @@ function _stopLogsAutoRefresh() {
     api("GET", "/weekconfigs").then(r => { state.wc = r.data.weekconfigs || {}; }),
     loadStatus()
   ]);
+  loadContext();
 })();
+
+// ─────────────────────────────────────────────────────────────────────────
+// CONTEXT & SERVICE
+// ─────────────────────────────────────────────────────────────────────────
+async function loadContext() {
+  const { data } = await api("GET", "/context");
+  if (data.context && data.context.startsWith("mac-")) {
+    document.getElementById("nav-service").style.display = "flex";
+  }
+}
+
+let _serviceCurrentAction = null;
+
+async function loadServiceStatus() {
+  const { data } = await api("GET", "/service/status");
+  const txt = document.getElementById("service-status-text");
+  const sub = document.getElementById("service-status-sub");
+  const btn = document.getElementById("btn-service-action");
+  if (data.error) {
+    txt.textContent = "Indisponible"; txt.style.color = "var(--muted)";
+    btn.style.display = "none"; return;
+  }
+  if (data.active) {
+    txt.textContent = "Actif"; txt.style.color = "var(--green)";
+    sub.textContent = "Le LaunchAgent tourne en arrière-plan.";
+    btn.textContent = "Désinstaller"; btn.className = "btn btn-danger";
+    btn.style.display = ""; _serviceCurrentAction = "uninstall";
+  } else if (data.plist_exists) {
+    txt.textContent = "Installé mais inactif"; txt.style.color = "var(--orange)";
+    sub.textContent = "Le plist existe mais le service n'est pas chargé.";
+    btn.textContent = "Désinstaller"; btn.className = "btn btn-danger";
+    btn.style.display = ""; _serviceCurrentAction = "uninstall";
+  } else {
+    txt.textContent = "Non installé"; txt.style.color = "var(--red)";
+    sub.textContent = "Aucun LaunchAgent enregistré.";
+    btn.textContent = "Installer le service"; btn.className = "btn btn-primary";
+    btn.style.display = ""; _serviceCurrentAction = "install";
+  }
+}
+
+function serviceAction() {
+  if (_serviceCurrentAction === "install") {
+    serviceActionConfirmed();
+  } else {
+    document.getElementById("btn-service-action").style.display = "none";
+    const c = document.getElementById("btn-service-confirm");
+    c.style.display = "flex";
+  }
+}
+
+function serviceActionCancelled() {
+  document.getElementById("btn-service-confirm").style.display = "none";
+  document.getElementById("btn-service-action").style.display = "";
+}
+
+async function serviceActionConfirmed() {
+  document.getElementById("btn-service-confirm").style.display = "none";
+  const out = document.getElementById("service-output");
+  out.style.display = "block";
+  if (_serviceCurrentAction === "install") {
+    out.textContent = "Installation en cours…";
+    const { data } = await api("POST", "/service/install");
+    out.textContent = data.output || "(pas de sortie)";
+    toast(data.ok ? "Service installé" : "Échec installation", data.ok ? "success" : "error");
+  } else {
+    out.textContent = "Désinstallation en cours…";
+    const { data } = await api("POST", "/service/uninstall");
+    out.textContent = data.output || "(pas de sortie)";
+    toast(data.ok ? "Service désinstallé" : "Échec désinstallation", data.ok ? "success" : "error");
+  }
+  await loadServiceStatus();
+}
 
 </script>
 </body>

@@ -29,7 +29,7 @@ echo ""
 SERVICE_ACTIVE=false
 PLIST_EXISTS=false
 
-if launchctl list 2>/dev/null | grep -q "$LABEL"; then
+if launchctl print "gui/$(id -u)/${LABEL}" >/dev/null 2>&1; then
     SERVICE_ACTIVE=true
 fi
 
@@ -73,13 +73,12 @@ echo ""
 # --- Désactivation -----------------------------------------------------------
 if [[ "$SERVICE_ACTIVE" == true ]]; then
     echo -e "${BOLD}🛑 Désactivation du service...${RESET}"
-    if launchctl bootout "gui/$(id -u)" "$PLIST_PATH" 2>/dev/null; then
-        echo -e "  ${GREEN}✓ Service désactivé${RESET}"
+    if [[ -f "$PLIST_PATH" ]]; then
+        launchctl bootout "gui/$(id -u)" "$PLIST_PATH" 2>/dev/null || true
     else
-        echo -e "${YELLOW}⚠ Impossible de désactiver proprement via bootout, tentative alternative...${RESET}"
-        launchctl remove "$LABEL" 2>/dev/null || true
-        echo -e "  ${GREEN}✓ Service retiré${RESET}"
+        launchctl bootout "gui/$(id -u)/${LABEL}" 2>/dev/null || true
     fi
+    echo -e "  ${GREEN}✓ Service désactivé${RESET}"
 fi
 
 # --- Suppression du plist ----------------------------------------------------
@@ -91,7 +90,7 @@ fi
 
 # --- Vérification finale -----------------------------------------------------
 echo ""
-if ! launchctl list 2>/dev/null | grep -q "$LABEL" && [[ ! -f "$PLIST_PATH" ]]; then
+if ! launchctl print "gui/$(id -u)/${LABEL}" >/dev/null 2>&1 && [[ ! -f "$PLIST_PATH" ]]; then
     echo -e "${GREEN}${BOLD}✅ tado-planning a été désinstallé proprement.${RESET}"
 else
     echo -e "${YELLOW}⚠ Vérification manuelle recommandée :${RESET}"

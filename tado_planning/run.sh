@@ -290,6 +290,10 @@ set_loop_files() {
     LOG_FILE="${SCHEDULES_DIR}/tado-planning.log"
 }
 
+log_run_header() {
+    log "━━━ START mode=${1} | verbosity=${VERBOSITY} ━━━"
+}
+
 rotate_log() {
     # Keep last 500KB — rename to .log.1 if exceeded
     local MAX=512000
@@ -345,6 +349,7 @@ if [ "$LOOP" = true ]; then
 
     CFG_URL=$(get_cfg_url)
     log "Starting configurator on ${CFG_HOST}:${CFG_PORT} — $CFG_URL"
+    TADO_CONTEXT="$CONTEXT" \
     TADO_SCHEDULES_DIR="$SCHEDULES_DIR" \
     TADO_TOKEN_FILE="$TOKEN_FILE" \
     $PYTHON "$CFG_SCRIPT" --host "$CFG_HOST" --port "$CFG_PORT" --no-browser &
@@ -356,7 +361,7 @@ if [ "$LOOP" = true ]; then
     while true; do
         LOOP_INTERVAL_SEC=$(read_loop_interval)
         LOOP_INTERVAL_MIN=$(( LOOP_INTERVAL_SEC / 60 ))
-        log "Running scheduler (interval: ${LOOP_INTERVAL_MIN}min)..."
+        log_run_header "loop (interval=${LOOP_INTERVAL_MIN}min)"
         TADO_SCHEDULES_DIR="$SCHEDULES_DIR" \
         TADO_TOKEN_FILE="$TOKEN_FILE" \
         $PYTHON "$PLANNING_SCRIPT" ${PYTHON_ARGS[@]+"${PYTHON_ARGS[@]}"} 2>&1 \
@@ -392,6 +397,7 @@ elif [ "$RUN_CFG" = true ]; then
     LOG_FILE="${SCHEDULES_DIR}/tado-planning.log"
     CFG_URL=$(get_cfg_url)
     log "Configurator on ${CFG_HOST}:${CFG_PORT} — $CFG_URL"
+    TADO_CONTEXT="$CONTEXT" \
     TADO_SCHEDULES_DIR="$SCHEDULES_DIR" \
     TADO_TOKEN_FILE="$TOKEN_FILE" \
     $PYTHON "$CFG_SCRIPT" --host "$CFG_HOST" --port "$CFG_PORT" \
@@ -401,10 +407,10 @@ else
     # -------------------------------------------------------------------------
     # Single scheduler run
     # -------------------------------------------------------------------------
-    log "Mode: run"
     init_schedules
     LOG_FILE="${SCHEDULES_DIR}/tado-planning.log"
     rotate_log
+    log_run_header "run"
     TADO_SCHEDULES_DIR="$SCHEDULES_DIR" \
     TADO_TOKEN_FILE="$TOKEN_FILE" \
     $PYTHON "$PLANNING_SCRIPT" ${PYTHON_ARGS[@]+"${PYTHON_ARGS[@]}"} 2>&1 | tee -a "$LOG_FILE"
