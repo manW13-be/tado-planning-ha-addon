@@ -36,8 +36,9 @@ fi
 # --- Bump de version (optionnel) --------------------------------------------
 if [ "$BUMP" = true ]; then
     echo "[PUSH] Fetching latest version from GitHub..."
-    git fetch origin main
-    REMOTE_VERSION=$(git show origin/main:tado_planning/config.json | jq -r '.version')
+    BRANCH=$(git rev-parse --abbrev-ref HEAD)
+    git fetch origin "$BRANCH"
+    REMOTE_VERSION=$(git show origin/"$BRANCH":tado_planning/config.json | jq -r '.version')
     IFS='.' read -r MAJOR MINOR PATCH <<< "$REMOTE_VERSION"
     NEW_VERSION="$MAJOR.$MINOR.$((PATCH + 1))"
     jq --arg v "$NEW_VERSION" '.version = $v' tado_planning/config.json > tado_planning/config.json.tmp && mv tado_planning/config.json.tmp tado_planning/config.json
@@ -52,6 +53,7 @@ fi
 FINAL_MSG="${COMMIT_MSG:-update v$CURRENT_VERSION}"
 git add -A
 git commit -m "$FINAL_MSG"
-git push origin main
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+git push origin "$BRANCH"
 
 echo "[PUSH] Done — v$CURRENT_VERSION pushed to GitHub"
