@@ -889,13 +889,15 @@ def api_loop_status():
     try:
         with open(LOOP_STATUS_FILE, encoding="utf-8") as f:
             data = json.load(f)
-        # Check if the pid is still alive
+        # Check if the pid is still alive (pid 1 = init, never a real loop)
         pid = data.get("pid")
-        if pid:
+        if pid and pid != 1:
             try:
                 os.kill(pid, 0)
             except (ProcessLookupError, PermissionError):
                 return jsonify({"running": False})
+        elif not pid or pid == 1:
+            return jsonify({"running": False})
         return jsonify({**data, "running": True})
     except Exception as e:
         return jsonify({"running": False, "error": str(e)})
@@ -908,7 +910,7 @@ def _loop_is_alive() -> bool:
     try:
         with open(LOOP_STATUS_FILE, encoding="utf-8") as f:
             pid = json.load(f).get("pid")
-        if pid:
+        if pid and pid != 1:
             os.kill(pid, 0)
             return True
     except Exception:
