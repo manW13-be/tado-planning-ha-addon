@@ -162,12 +162,15 @@ tado-planning/
 │   ├── settings.json             # loop_interval, default_zone template
 │   ├── loop_status.json          # Current loop state (runtime)
 │   └── tado-planning.log         # Rotated log (500 KB max)
+├── dist/                         # macOS app build output (gitignored)
+│   └── TadoPlanning.app          # Built by macos_app_build.sh
 ├── scripts/
 │   ├── list_zones.sh             # List Tado zones (Mac + HA SSH)
 │   ├── git_fetch.sh              # Pull from GitHub
 │   ├── git_push.sh               # Commit + push to GitHub
 │   ├── launchd_install.sh        # macOS: install & activate launchd agent
 │   ├── launchd_uninstall.sh      # macOS: deactivate & remove launchd agent
+│   ├── macos_app_build.sh        # macOS: build TadoPlanning.app + DMG
 │   ├── docker_test_build.sh      # Build test Docker image
 │   ├── docker_test_start.sh      # Start test container
 │   ├── docker_test_stop.sh       # Stop test container
@@ -184,7 +187,7 @@ tado-planning runs on **Home Assistant** (as an add-on) or on **macOS** (via lau
 > **Run it on one platform only.** Running both simultaneously risks pushing conflicting configurations to Tado.
 
 - **Home Assistant** — recommended if HA is always running and you want everything in one place. The web configurator is accessible as an HA panel.
-- **macOS** — useful if you prefer managing config from your Mac. Start the configurator on demand with `--cfg`.
+- **macOS** — useful if you prefer managing config from your Mac. Use `TadoPlanning.app` for a one-click experience, or `run.sh --cfg` from the terminal.
 
 ---
 
@@ -267,16 +270,29 @@ Opens a browser tab to authenticate with Tado. The token is saved to `tado_plann
 
 ### Step 3 — Configure your schedules via the web UI
 
+**Option A — macOS app (recommended)**
+
+```bash
+./scripts/macos_app_build.sh --app-only
+open dist/TadoPlanning.app
+```
+
+Builds and launches `TadoPlanning.app`. The app starts Flask in the background and opens the web configurator at `http://localhost:8099` automatically. On subsequent launches it detects Flask already running and reopens the browser directly.
+
+**Option B — terminal**
+
 ```bash
 ./tado_planning/run.sh --cfg
 ```
 
-Opens the web configurator at `http://localhost:8080` in your browser. Use it to:
+Opens the web configurator at `http://localhost:8099`. Stop with Ctrl+C when done.
+
+Use the configurator to:
 1. Create your **weekconfigs** (zone temperature profiles)
 2. Create your **plannings** (standard cycle + exceptions)
 3. Check the **Status** tab to verify the current state
 
-See [Web configurator](#web-configurator) below. Stop with Ctrl+C when done.
+See [Web configurator](#web-configurator) below.
 
 ### Step 4 — Verify manually
 
@@ -288,18 +304,18 @@ Use `-d YYYY-MM-DD` to simulate a specific date. Check that configurations are a
 
 ### Step 5 — Install the launchd agent
 
-Once everything works correctly:
+Once everything works correctly, install the launchd agent — either from the **Service** tab in the web configurator, or from the terminal:
 
 ```bash
-./scripts/launchd_install.sh
+./scripts/launchd_install.sh          # interactive install (supports --dry-run)
+./scripts/launchd_uninstall.sh        # remove agent
 ```
 
-The agent runs the scheduler every hour automatically.
+The agent starts `run.sh --loop` at login: the scheduler runs on its configured interval and the web configurator runs in parallel.
 
 ```bash
+launchctl print gui/$(id -u)/com.tado-planning  # check agent status
 launchctl kickstart -k gui/$(id -u)/com.tado-planning  # force immediate run
-launchctl list | grep tado                              # check agent status
-./scripts/launchd_uninstall.sh                         # remove agent
 ```
 
 ---
@@ -309,7 +325,7 @@ launchctl list | grep tado                              # check agent status
 The web configurator manages all schedule data through a browser UI. It is available:
 
 - **Home Assistant**: as a panel in the HA sidebar (ingress, no port needed), or at `http://ha2.local:8099`
-- **macOS**: on demand via `./tado_planning/run.sh --cfg` at `http://localhost:8080`
+- **macOS**: via `TadoPlanning.app` or `./tado_planning/run.sh --cfg` at `http://localhost:8099`
 
 ### Sections
 
@@ -320,6 +336,7 @@ The web configurator manages all schedule data through a browser UI. It is avail
 | **Plannings** | Create, edit, copy, rename, delete plannings (standard + exceptions) |
 | **Settings** | Scheduler loop interval, default zone template for new weekconfigs |
 | **Logs** | Live log viewer with colour-coded entries, auto-refresh, manual clear |
+| **Service** | macOS only — install or uninstall the launchd agent from the UI, with live status |
 
 The Status section also has a **▶ Run now** button to trigger the scheduler immediately, whether or not the loop is running.
 
@@ -493,7 +510,7 @@ The launchd agent picks up the updated scripts at the next scheduled run automat
 | Wrong configuration applied | `./tado_planning/run.sh -d YYYY-MM-DD -vv` to simulate and inspect |
 | Zone names not matching | Run `./scripts/list_zones.sh` and compare with weekconfig zone keys |
 | Schedules not applied | Check logs in web UI or with `-vv`; verify JSON in the configurator |
-| launchd agent not running (Mac) | `launchctl list \| grep tado` — re-run `launchd_install.sh` if missing |
+| launchd agent not running (Mac) | `launchctl print gui/$(id -u)/com.tado-planning` — re-run `launchd_install.sh` or use the Service tab in the web UI |
 | HA add-on crash on start | `./tado_planning/run.sh -vv` from HA SSH for full output |
 | Web UI stuck on spinner | Check browser console for JS errors; verify Flask is running on the expected port |
 
@@ -520,7 +537,9 @@ Environment variables override default paths:
 
 Flask app serving a single-page UI. Exposes a REST API (`/api/*`) consumed by the frontend. In `--loop` mode (HA container), it runs as a background process alongside the scheduler loop. In `--cfg` mode (standalone), it runs alone.
 
-On macOS, it opens the browser automatically and binds to `127.0.0.1:8080`. On HA, it binds to `0.0.0.0:8099` with ingress support.
+On macOS, it opens the browser automatically and binds to `127.0.0.1:8099`. On HA, it binds to `0.0.0.0:8099` with ingress support.
+
+`run.sh` passes `TADO_CONTEXT` to the Flask process so the UI can adapt per platform — for example showing the **Service** tab only on macOS.
 
 #### `run.sh`
 
@@ -578,7 +597,16 @@ Pull from / push to GitHub. Used to sync code between Mac and HA.
 
 #### `scripts/launchd_install.sh` / `scripts/launchd_uninstall.sh`
 
-macOS only. Installs or removes the launchd agent (`com.tado-planning`) that runs the scheduler hourly.
+macOS only. Installs or removes the launchd agent (`com.tado-planning`). `launchd_install.sh` supports `--dry-run` to simulate the full install without making any changes. Both scripts are also callable from the web configurator's **Service** tab.
+
+#### `scripts/macos_app_build.sh`
+
+Builds `TadoPlanning.app` (and optionally a DMG) from the current project directory. The project path and port are baked into the launcher at build time.
+
+```bash
+./scripts/macos_app_build.sh            # build app + DMG
+./scripts/macos_app_build.sh --app-only # build app only (faster, for local testing)
+```
 
 #### `scripts/docker_test_build.sh` / `docker_test_start.sh` / `docker_test_stop.sh` / `docker_test_remove.sh`
 
@@ -640,6 +668,7 @@ The version is used by the HA store to detect available updates.
 | Token file format | Must be `{"refresh_token": "..."}` JSON, not plain text |
 | HAOS overlay filesystem | `docker build --no-cache` required to avoid stale layers |
 | launchd env isolation | launchd agents don't inherit shell env vars; all paths declared explicitly in the plist |
+| `launchctl list` in subprocesses | `launchctl list` does not see GUI-domain services from Python/bash subprocesses; use `launchctl print gui/<uid>/<label>` instead (return code 0 = active) |
 | `run.sh` baked in image | Changes to `run.sh` require a container rebuild. Use `docker cp` for quick tests. |
 | `settings.json` not in git | Created on first save in the UI. Defaults: `loop_interval: 60`, `default_zone` template hardcoded in the UI. |
 
