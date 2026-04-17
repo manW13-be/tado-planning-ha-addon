@@ -21,3 +21,6 @@ venv/
 
 # macOS app build artifacts
 dist/
+
+# Claude Code local session data
+.claude/
