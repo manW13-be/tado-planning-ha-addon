@@ -144,7 +144,7 @@ else
 fi
 
 # --- Déchargement si déjà actif (avant d'écrire le nouveau plist) -----------
-if launchctl list 2>/dev/null | grep -q "$LABEL"; then
+if launchctl print "gui/$(id -u)/${LABEL}" >/dev/null 2>&1; then
     if [[ $DRY_RUN -eq 1 ]]; then
         echo -e "  ${YELLOW}[DRY RUN] Service déjà actif — launchctl bootout gui/$(id -u) serait exécuté${RESET}"
     else
@@ -229,7 +229,7 @@ else
 
     # --- Vérification finale -------------------------------------------------
     echo ""
-    if launchctl list | grep -q "$LABEL"; then
+    if launchctl print "gui/$(id -u)/${LABEL}" >/dev/null 2>&1; then
         echo -e "${GREEN}${BOLD}✅ tado-planning est installé et actif.${RESET}"
         echo -e "   Scheduler + configurateur web démarrés (--loop)."
         echo -e "   UI  : ${CYAN}http://localhost:${CFG_PORT}${RESET}"

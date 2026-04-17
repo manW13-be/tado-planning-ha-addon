@@ -30,18 +30,84 @@ document.addEventListener("DOMContentLoaded", () => {
       document.querySelectorAll(".section").forEach(s => s.classList.remove("active"));
       item.classList.add("active");
       document.getElementById(`section-${item.dataset.section}`).classList.add("active");
-      if (item.dataset.section === "status") loadStatus();
-      if (item.dataset.section === "configs") loadConfigs();
+      if (item.dataset.section === "status")   loadStatus();
+      if (item.dataset.section === "configs")  loadConfigs();
       if (item.dataset.section === "planning") loadPlanning();
       if (item.dataset.section === "exceptions") loadExceptions();
+      if (item.dataset.section === "service")  loadServiceStatus();
     });
   });
 
   // Initial load
   loadStatus();
   loadZones();
+  loadContext();
   document.getElementById("schedulesPath").textContent = "schedules/";
 });
+
+// ── CONTEXT ────────────────────────────────────────────────
+async function loadContext() {
+  const data = await api("GET", "/context");
+  if (data.context && data.context.startsWith("mac-")) {
+    document.getElementById("nav-service").style.display = "flex";
+  }
+}
+
+// ── SERVICE ────────────────────────────────────────────────
+async function loadServiceStatus() {
+  const data = await api("GET", "/service/status");
+  const txt = document.getElementById("service-status-text");
+  const sub = document.getElementById("service-status-sub");
+  const btnInstall   = document.getElementById("btn-install");
+  const btnUninstall = document.getElementById("btn-uninstall");
+
+  if (data.error) {
+    txt.textContent = "Indisponible";
+    txt.style.color = "var(--muted)";
+    return;
+  }
+
+  if (data.active) {
+    txt.textContent = "Actif";
+    txt.style.color = "var(--green)";
+    sub.textContent = "Le LaunchAgent tourne en arrière-plan.";
+    btnInstall.disabled = true;
+    btnUninstall.disabled = false;
+  } else if (data.plist_exists) {
+    txt.textContent = "Installé mais inactif";
+    txt.style.color = "var(--orange)";
+    sub.textContent = "Le plist existe mais le service n'est pas chargé.";
+    btnInstall.disabled = false;
+    btnUninstall.disabled = false;
+  } else {
+    txt.textContent = "Non installé";
+    txt.style.color = "var(--red)";
+    sub.textContent = "Aucun LaunchAgent enregistré.";
+    btnInstall.disabled = false;
+    btnUninstall.disabled = true;
+  }
+}
+
+async function serviceInstall() {
+  const out = document.getElementById("service-output");
+  out.style.display = "block";
+  out.textContent = "Installation en cours…";
+  const data = await api("POST", "/service/install");
+  out.textContent = data.output || "(pas de sortie)";
+  toast(data.ok ? "Service installé" : "Échec installation", data.ok ? "success" : "error");
+  await loadServiceStatus();
+}
+
+async function serviceUninstall() {
+  if (!confirm("Désinstaller le LaunchAgent tado-planning ?")) return;
+  const out = document.getElementById("service-output");
+  out.style.display = "block";
+  out.textContent = "Désinstallation en cours…";
+  const data = await api("POST", "/service/uninstall");
+  out.textContent = data.output || "(pas de sortie)";
+  toast(data.ok ? "Service désinstallé" : "Échec désinstallation", data.ok ? "success" : "error");
+  await loadServiceStatus();
+}
 
 // ── API HELPERS ────────────────────────────────────────────
 async function api(method, path, body) {
