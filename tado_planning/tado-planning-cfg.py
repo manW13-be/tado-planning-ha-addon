@@ -40,8 +40,9 @@ else:
     _DEFAULT_TOKEN_FILE = "/data/tado_refresh_token"
     _DEFAULT_DATA_DIR   = "/config/tado-planning/schedules"
 
-TOKEN_FILE = os.environ.get("TADO_TOKEN_FILE",    _DEFAULT_TOKEN_FILE)
-DATA_DIR   = os.environ.get("TADO_SCHEDULES_DIR", _DEFAULT_DATA_DIR)
+TOKEN_FILE    = os.environ.get("TADO_TOKEN_FILE",    _DEFAULT_TOKEN_FILE)
+DATA_DIR      = os.environ.get("TADO_SCHEDULES_DIR", _DEFAULT_DATA_DIR)
+TADO_CONTEXT  = os.environ.get("TADO_CONTEXT", "unknown")
 
 PLANNINGS_FILE   = os.path.join(DATA_DIR, "plannings.json")
 WEEKCONFIGS_FILE = os.path.join(DATA_DIR, "weekconfigs.json")
@@ -51,8 +52,9 @@ LOOP_TRIGGER_FILE = os.path.join(DATA_DIR, "loop_trigger")
 LOG_FILE          = os.path.join(DATA_DIR, "tado-planning.log")
 LOG_FILE_PREV     = os.path.join(DATA_DIR, "tado-planning.log.1")
 
-# Planning script path — same directory as this file
+# Script / project paths
 _SCRIPT_DIR     = os.path.dirname(os.path.abspath(__file__))
+_PROJECT_DIR    = os.path.dirname(_SCRIPT_DIR)
 PLANNING_SCRIPT = os.path.join(_SCRIPT_DIR, "tado-planning-run.py")
 
 # ---------------------------------------------------------------------------
@@ -998,6 +1000,57 @@ def api_settings_save():
     save_settings(data)
     return jsonify({"ok": True})
 
+
+# ---------------------------------------------------------------------------
+# CONTEXT & SERVICE (macOS launchd management)
+# ---------------------------------------------------------------------------
+
+import re as _re
+
+def _strip_ansi(text):
+    return _re.sub(r'\x1b\[[0-9;]*m', '', text)
+
+@app.route("/api/context")
+def api_context():
+    return jsonify({"context": TADO_CONTEXT})
+
+@app.route("/api/service/status")
+def api_service_status():
+    if not TADO_CONTEXT.startswith("mac-"):
+        return jsonify({"error": "not macOS"}), 400
+    result = subprocess.run(
+        ["launchctl", "print", f"gui/{os.getuid()}/com.tado-planning"],
+        capture_output=True, text=True
+    )
+    active = result.returncode == 0
+    plist  = os.path.expanduser("~/Library/LaunchAgents/com.tado-planning.plist")
+    return jsonify({"active": active, "plist_exists": os.path.isfile(plist)})
+
+@app.route("/api/service/install", methods=["POST"])
+def api_service_install():
+    if not TADO_CONTEXT.startswith("mac-"):
+        return jsonify({"error": "not macOS"}), 400
+    script = os.path.join(_PROJECT_DIR, "scripts", "launchd_install.sh")
+    result = subprocess.run(
+        ["bash", script], input="o\n", capture_output=True, text=True
+    )
+    return jsonify({
+        "ok": result.returncode == 0,
+        "output": _strip_ansi(result.stdout + result.stderr)
+    })
+
+@app.route("/api/service/uninstall", methods=["POST"])
+def api_service_uninstall():
+    if not TADO_CONTEXT.startswith("mac-"):
+        return jsonify({"error": "not macOS"}), 400
+    script = os.path.join(_PROJECT_DIR, "scripts", "launchd_uninstall.sh")
+    result = subprocess.run(
+        ["bash", script], input="o\n", capture_output=True, text=True
+    )
+    return jsonify({
+        "ok": result.returncode == 0,
+        "output": _strip_ansi(result.stdout + result.stderr)
+    })
 
 # ---------------------------------------------------------------------------
 # MAIN
