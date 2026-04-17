@@ -18,3 +18,6 @@ schedules/
 logs/
 
 venv/
+
+# macOS app build artifacts
+dist/

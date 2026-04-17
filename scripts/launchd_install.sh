@@ -5,6 +5,12 @@
 
 set -euo pipefail
 
+# --- Dry-run flag ------------------------------------------------------------
+DRY_RUN=0
+for arg in "$@"; do
+    [[ "$arg" == "--dry-run" ]] && DRY_RUN=1
+done
+
 # --- Couleurs ----------------------------------------------------------------
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -59,7 +65,11 @@ check_python_version() {
 # --- En-tête -----------------------------------------------------------------
 echo ""
 echo -e "${CYAN}${BOLD}╔══════════════════════════════════════════╗${RESET}"
+if [[ $DRY_RUN -eq 1 ]]; then
+echo -e "${CYAN}${BOLD}║   tado-planning — Installation (DRY RUN) ║${RESET}"
+else
 echo -e "${CYAN}${BOLD}║      tado-planning — Installation macOS  ║${RESET}"
+fi
 echo -e "${CYAN}${BOLD}╚══════════════════════════════════════════╝${RESET}"
 echo ""
 
@@ -75,30 +85,29 @@ PYTHON_VERSION=$(check_python_version "$PYTHON_BIN") || exit 1
 echo -e "  ${GREEN}✓ Python $PYTHON_VERSION${RESET} → ${PYTHON_BIN}"
 
 # --- Chemins détectés --------------------------------------------------------
-SCRIPT_PATH="${PROJECT_DIR}/run/tado-planning.py"
-TOKEN_FILE="${PROJECT_DIR}/tado_refresh_token"
+RUN_SCRIPT="${PROJECT_DIR}/tado_planning/run.sh"
 SCHEDULES_DIR="${PROJECT_DIR}/schedules"
-LOGS_DIR="${PROJECT_DIR}/logs"
-LOG_OUT="${LOGS_DIR}/tado.log"
-LOG_ERR="${LOGS_DIR}/tado_error.log"
+LOG_OUT="${SCHEDULES_DIR}/tado-planning.log"
+LOG_ERR="${SCHEDULES_DIR}/tado-planning-err.log"
+CFG_PORT=$(jq -r '.ingress_port // 8099' "${PROJECT_DIR}/tado_planning/config.json" 2>/dev/null || echo "8099")
 
 echo ""
 echo -e "${BOLD}📂 Configuration détectée :${RESET}"
 echo -e "  Répertoire projet  : ${CYAN}${PROJECT_DIR}${RESET}"
-echo -e "  Script Python      : ${CYAN}${SCRIPT_PATH}${RESET}"
-echo -e "  Token file         : ${CYAN}${TOKEN_FILE}${RESET}"
+echo -e "  Script             : ${CYAN}${RUN_SCRIPT}${RESET}"
 echo -e "  Schedules dir      : ${CYAN}${SCHEDULES_DIR}${RESET}"
+echo -e "  Port configurateur : ${CYAN}${CFG_PORT}${RESET}"
 echo -e "  Log stdout         : ${CYAN}${LOG_OUT}${RESET}"
 echo -e "  Log stderr         : ${CYAN}${LOG_ERR}${RESET}"
 echo -e "  Plist destination  : ${CYAN}${PLIST_PATH}${RESET}"
-echo -e "  Fréquence          : ${CYAN}toutes les heures (minute 0)${RESET}"
+echo -e "  Mode               : ${CYAN}--loop (scheduler + configurateur web)${RESET}"
 
 # --- Vérifications -----------------------------------------------------------
 echo ""
 WARNINGS=0
 
-if [[ ! -f "$SCRIPT_PATH" ]]; then
-    echo -e "${RED}✗ Script introuvable : ${SCRIPT_PATH}${RESET}"
+if [[ ! -f "$RUN_SCRIPT" ]]; then
+    echo -e "${RED}✗ Script introuvable : ${RUN_SCRIPT}${RESET}"
     WARNINGS=$((WARNINGS + 1))
 fi
 
@@ -114,23 +123,49 @@ fi
 
 # --- Confirmation ------------------------------------------------------------
 echo ""
-echo -e "${YELLOW}${BOLD}Confirmer l'installation ? [o/N]${RESET} \c"
-read -r confirm
-if [[ ! "$confirm" =~ ^[oOyY]$ ]]; then
-    echo -e "${YELLOW}Installation annulée.${RESET}"
-    exit 0
+if [[ $DRY_RUN -eq 1 ]]; then
+    echo -e "${YELLOW}${BOLD}[DRY RUN] Aucune modification ne sera effectuée.${RESET}"
+else
+    echo -e "${YELLOW}${BOLD}Confirmer l'installation ? [o/N]${RESET} \c"
+    read -r confirm
+    if [[ ! "$confirm" =~ ^[oOyY]$ ]]; then
+        echo -e "${YELLOW}Installation annulée.${RESET}"
+        exit 0
+    fi
 fi
 
 # --- Création des dossiers ---------------------------------------------------
-mkdir -p "$LAUNCH_AGENTS_DIR"
-mkdir -p "$LOGS_DIR"
-mkdir -p "$SCHEDULES_DIR"
+if [[ $DRY_RUN -eq 1 ]]; then
+    echo -e "  ${YELLOW}[DRY RUN] mkdir -p ${LAUNCH_AGENTS_DIR}${RESET}"
+    echo -e "  ${YELLOW}[DRY RUN] mkdir -p ${SCHEDULES_DIR}${RESET}"
+else
+    mkdir -p "$LAUNCH_AGENTS_DIR"
+    mkdir -p "$SCHEDULES_DIR"
+fi
+
+# --- Déchargement si déjà actif (avant d'écrire le nouveau plist) -----------
+if launchctl list 2>/dev/null | grep -q "$LABEL"; then
+    if [[ $DRY_RUN -eq 1 ]]; then
+        echo -e "  ${YELLOW}[DRY RUN] Service déjà actif — launchctl bootout gui/$(id -u) serait exécuté${RESET}"
+    else
+        echo -e "${BOLD}🔄 Service déjà actif, déchargement...${RESET}"
+        launchctl bootout "gui/$(id -u)" "$PLIST_PATH" 2>/dev/null || \
+        launchctl remove "$LABEL" 2>/dev/null || true
+        sleep 1
+    fi
+fi
 
 # --- Génération du plist -----------------------------------------------------
 echo ""
 echo -e "${BOLD}📝 Génération du plist...${RESET}"
 
-cat > "$PLIST_PATH" <<EOF
+if [[ $DRY_RUN -eq 1 ]]; then
+    echo -e "  ${YELLOW}[DRY RUN] Plist qui serait écrit dans : ${PLIST_PATH}${RESET}"
+    PLIST_DEST=/dev/stdout
+else
+    PLIST_DEST="$PLIST_PATH"
+fi
+cat > "$PLIST_DEST" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
   "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -141,8 +176,9 @@ cat > "$PLIST_PATH" <<EOF
 
     <key>ProgramArguments</key>
     <array>
-        <string>${PYTHON_BIN}</string>
-        <string>${SCRIPT_PATH}</string>
+        <string>/bin/bash</string>
+        <string>${RUN_SCRIPT}</string>
+        <string>--loop</string>
     </array>
 
     <key>WorkingDirectory</key>
@@ -150,19 +186,14 @@ cat > "$PLIST_PATH" <<EOF
 
     <key>EnvironmentVariables</key>
     <dict>
-        <key>TADO_TOKEN_FILE</key>
-        <string>${TOKEN_FILE}</string>
-        <key>TADO_SCHEDULES_DIR</key>
-        <string>${SCHEDULES_DIR}</string>
+        <key>LAUNCHED_BY_LAUNCHD</key>
+        <string>1</string>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
     </dict>
 
-    <key>StartCalendarInterval</key>
-    <array>
-        <dict>
-            <key>Minute</key>
-            <integer>0</integer>
-        </dict>
-    </array>
+    <key>KeepAlive</key>
+    <true/>
 
     <key>StandardOutPath</key>
     <string>${LOG_OUT}</string>
@@ -170,37 +201,43 @@ cat > "$PLIST_PATH" <<EOF
     <string>${LOG_ERR}</string>
 
     <key>RunAtLoad</key>
-    <false/>
+    <true/>
 </dict>
 </plist>
 EOF
 
-echo -e "  ${GREEN}✓ Plist créé${RESET}"
-
-# --- Déchargement si déjà actif ----------------------------------------------
-if launchctl list | grep -q "$LABEL" 2>/dev/null; then
-    echo -e "${BOLD}🔄 Service déjà actif, déchargement...${RESET}"
-    launchctl bootout "gui/$(id -u)" "$PLIST_PATH" 2>/dev/null || true
+if [[ $DRY_RUN -eq 1 ]]; then
+    echo -e "  ${YELLOW}[DRY RUN] Plist affiché ci-dessus (non écrit sur disque)${RESET}"
+else
+    echo -e "  ${GREEN}✓ Plist créé${RESET}"
 fi
 
 # --- Activation --------------------------------------------------------------
-echo -e "${BOLD}🚀 Activation du LaunchAgent...${RESET}"
-if launchctl bootstrap "gui/$(id -u)" "$PLIST_PATH"; then
-    echo -e "  ${GREEN}✓ Service activé${RESET}"
+if [[ $DRY_RUN -eq 1 ]]; then
+    echo -e "${YELLOW}[DRY RUN] launchctl bootstrap gui/$(id -u) ${PLIST_PATH}${RESET}"
+    echo ""
+    echo -e "${GREEN}${BOLD}✅ [DRY RUN] Simulation terminée — aucune modification effectuée.${RESET}"
+    echo -e "   Relancez sans --dry-run pour installer réellement."
 else
-    echo -e "${RED}✗ Échec de l'activation. Vérifiez le plist : ${PLIST_PATH}${RESET}"
-    exit 1
-fi
+    echo -e "${BOLD}🚀 Activation du LaunchAgent...${RESET}"
+    if launchctl bootstrap "gui/$(id -u)" "$PLIST_PATH"; then
+        echo -e "  ${GREEN}✓ Service activé${RESET}"
+    else
+        echo -e "${RED}✗ Échec de l'activation. Vérifiez le plist : ${PLIST_PATH}${RESET}"
+        exit 1
+    fi
 
-# --- Vérification finale -----------------------------------------------------
-echo ""
-if launchctl list | grep -q "$LABEL"; then
-    echo -e "${GREEN}${BOLD}✅ tado-planning est installé et actif.${RESET}"
-    echo -e "   Il s'exécutera toutes les heures."
-    echo -e "   Logs : ${CYAN}${LOGS_DIR}/${RESET}"
-else
-    echo -e "${YELLOW}⚠ Le service a été chargé mais n'apparaît pas encore dans launchctl list.${RESET}"
-    echo -e "  Attendez quelques secondes et vérifiez avec : ${CYAN}launchctl list | grep tado${RESET}"
+    # --- Vérification finale -------------------------------------------------
+    echo ""
+    if launchctl list | grep -q "$LABEL"; then
+        echo -e "${GREEN}${BOLD}✅ tado-planning est installé et actif.${RESET}"
+        echo -e "   Scheduler + configurateur web démarrés (--loop)."
+        echo -e "   UI  : ${CYAN}http://localhost:${CFG_PORT}${RESET}"
+        echo -e "   Logs: ${CYAN}${LOG_OUT}${RESET}"
+    else
+        echo -e "${YELLOW}⚠ Le service a été chargé mais n'apparaît pas encore dans launchctl list.${RESET}"
+        echo -e "  Attendez quelques secondes et vérifiez avec : ${CYAN}launchctl list | grep tado${RESET}"
+    fi
 fi
 
 echo ""
