@@ -96,9 +96,9 @@ if [ "$LOOP" = true ] && [ "$RUN_CFG" = true ]; then
     die "--loop and --cfg are mutually exclusive."
 fi
 
-# --loop only makes sense inside a container
-if [ "$LOOP" = true ] && [[ "$CONTEXT" != ha-docker-* ]]; then
-    die "--loop is only valid inside a Docker container. Use --cfg or no flag for local runs."
+# --loop is valid inside a container or under mac-launchd
+if [ "$LOOP" = true ] && [[ "$CONTEXT" != ha-docker-* ]] && [ "$CONTEXT" != "mac-launchd" ]; then
+    die "--loop is only valid inside a Docker container or under launchd. Use --cfg or no flag for interactive runs."
 fi
 
 # ---------------------------------------------------------------------------
@@ -107,10 +107,11 @@ fi
 case "$CONTEXT" in
 
     mac-shell)
-        if launchctl list 2>/dev/null | grep -q "$LAUNCHD_LABEL"; then
+        # --cfg only starts the configurator — no conflict with the scheduler
+        if [ "$RUN_CFG" != true ] && launchctl list 2>/dev/null | grep -q "$LAUNCHD_LABEL"; then
             die "macOS launchd prod agent is running.
-  Stop it first: ./scripts/uninstall_launchd.sh
-  Or:            launchctl unload ~/Library/LaunchAgents/${LAUNCHD_LABEL}.plist"
+  Stop it first: ./scripts/launchd_uninstall.sh
+  Or:            launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/${LAUNCHD_LABEL}.plist"
         fi
         ;;
 
@@ -156,10 +157,10 @@ case "$CONTEXT" in
         PYTHON=$(which python3.11 2>/dev/null || which python3)
         PLANNING_SCRIPT="$SCRIPT_DIR/tado-planning-run.py"
         CFG_SCRIPT="$SCRIPT_DIR/tado-planning-cfg.py"
-        CFG_PORT="${CFG_PORT:-8080}"
+        VERSION=$(jq -r '.version' "$SCRIPT_DIR/config.json" 2>/dev/null || echo "unknown")
+        CFG_PORT="${CFG_PORT:-$(jq -r '.ingress_port // 8099' "$SCRIPT_DIR/config.json" 2>/dev/null || echo 8099)}"
         CFG_HOST="127.0.0.1"
         VERBOSITY=0
-        VERSION=$(jq -r '.version' "$SCRIPT_DIR/config.json" 2>/dev/null || echo "unknown")
         ;;
 
     ha-shell)
