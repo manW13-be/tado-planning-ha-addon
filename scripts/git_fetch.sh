@@ -10,8 +10,9 @@ set -e
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_DIR"
 
-echo "[FETCH] Pulling from GitHub..."
-git pull origin main
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+echo "[FETCH] Pulling from GitHub ($BRANCH)..."
+git pull origin "$BRANCH"
 
 # Synchro .gitignore → gitignore (visible depuis Finder/Samba)
 if [ -f ".gitignore" ]; then
@@ -19,4 +20,4 @@ if [ -f ".gitignore" ]; then
     echo "[FETCH] .gitignore → gitignore"
 fi
 
-echo "[FETCH] Done — v$(jq -r '.version' run/config.json)"
+echo "[FETCH] Done — v$(jq -r '.version' tado_planning/config.json)"
