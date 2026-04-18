@@ -601,7 +601,8 @@ def get_timeline(days: int = 14) -> dict:
 
 @app.route("/")
 def index():
-    return render_template("index.html")
+    ingress_path = request.headers.get("X-Ingress-Path", "")
+    return render_template("index.html", ingress_path=ingress_path)
 
 
 @app.route("/api/status")
