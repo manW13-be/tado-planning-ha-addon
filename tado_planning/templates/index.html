@@ -287,6 +287,20 @@ body { font-family: var(--font); background: var(--bg); color: var(--text);
 .tt-tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 
 .hidden { display: none !important; }
+
+/* ── SECTION TABS ── */
+.sec-tabs-bar { display: flex; border-bottom: 1px solid var(--border);
+                background: var(--surface); padding: 0 28px; flex-shrink: 0; }
+.sec-tab-btn { padding: 10px 16px; font-size: 13px; cursor: pointer; border: none;
+               background: none; color: var(--muted); font-weight: 500;
+               border-bottom: 2px solid transparent; margin-bottom: -1px;
+               transition: color .12s, border-color .12s; }
+.sec-tab-btn:hover { color: var(--text); }
+.sec-tab-btn.active { color: var(--accent); font-weight: 600; border-bottom-color: var(--accent); }
+.sec-tab-panel { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+.sec-tab-panel.hidden { display: none !important; }
+.sec-tab-panel .list-panel-body,
+.sec-tab-panel .detail-body { max-height: calc(100vh - 215px); }
 </style>
 </head>
 <body>
@@ -294,36 +308,20 @@ body { font-family: var(--font); background: var(--bg); color: var(--text);
 <!-- SIDEBAR -->
 <nav class="sidebar">
   <div class="sidebar-title">Tado Planning</div>
-  <div class="nav-section">Overview</div>
   <div class="nav-item active" data-section="status" onclick="showSection('status')">
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
       <circle cx="8" cy="8" r="6"/><path d="M8 5v3l2 1.5"/>
     </svg>
-    Active status
+    Active Status
   </div>
-  <div class="nav-section">Configuration</div>
-  <div class="nav-item" data-section="weekconfigs" onclick="showSection('weekconfigs')">
+  <div class="nav-item" data-section="config" onclick="showSection('config')">
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
       <rect x="2" y="3" width="12" height="10" rx="1"/>
       <path d="M5 7h6M5 10h4"/>
     </svg>
-    Weekconfigs
-  </div>
-  <div class="nav-item" data-section="plannings" onclick="showSection('plannings')">
-    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-      <rect x="2" y="2" width="12" height="12" rx="1"/>
-      <path d="M5 2v12M2 6h3M2 10h3"/>
-    </svg>
-    Plannings
+    Configuration
   </div>
   <div class="nav-section">System</div>
-  <div class="nav-item" data-section="settings" onclick="showSection('settings')">
-    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-      <circle cx="8" cy="8" r="2.5"/>
-      <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/>
-    </svg>
-    Settings
-  </div>
   <div class="nav-item" data-section="logs" onclick="showSection('logs')">
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
       <rect x="2" y="2" width="12" height="12" rx="1"/>
@@ -344,132 +342,143 @@ body { font-family: var(--font); background: var(--bg); color: var(--text);
 <!-- MAIN -->
 <main class="main">
 
-  <!-- ── STATUS ── -->
+  <!-- ── ACTIVE STATUS ── -->
   <section class="section active" id="sec-status">
     <div class="section-header">
-      <h1>Active status</h1>
-      <button class="btn btn-secondary btn-sm" onclick="loadStatus()">↻ Refresh</button>
+      <h1>Active Status</h1>
+      <button class="btn btn-secondary btn-sm" id="statusRefreshBtn" onclick="statusTabRefresh()">↻ Refresh</button>
     </div>
-    <div class="section-body" id="statusBody">
-      <div class="empty"><div class="empty-icon">⏳</div><div class="empty-text">Loading...</div></div>
+    <div class="sec-tabs-bar">
+      <button class="sec-tab-btn active" data-sec-tab="status:planning" onclick="showSecTab('status','planning')">Planning</button>
+      <button class="sec-tab-btn"        data-sec-tab="status:tado"     onclick="showSecTab('status','tado')">Weekconfig</button>
     </div>
-  </section>
-
-  <!-- ── WEEKCONFIGS ── -->
-  <section class="section" id="sec-weekconfigs">
-    <div class="section-header">
-      <h1>Weekconfigs</h1>
+    <div class="sec-tab-panel" id="status-tab-planning">
+      <div class="section-body" id="statusBody">
+        <div class="empty"><div class="empty-icon">⏳</div><div class="empty-text">Loading...</div></div>
+      </div>
     </div>
-    <div class="section-body">
-      <div class="split">
-        <div class="list-panel">
-          <div class="list-panel-header">
-            <span class="list-panel-title">Configs</span>
-            <div style="display:flex;gap:4px">
-              <button class="btn btn-secondary btn-sm" onclick="wcNew()">+ New</button>
-              <button class="btn btn-secondary btn-sm" onclick="wcCopyFrom()">⎘ Copy</button>
-            </div>
-          </div>
-          <div class="list-panel-body" id="wcList"></div>
-        </div>
-        <div class="detail-panel">
-          <div class="detail-header" id="wcDetailHeader" style="display:none">
-            <div style="display:flex;align-items:center;gap:10px;flex:1">
-              <input class="form-input" id="wcDetailName" placeholder="Config name"
-                style="max-width:200px;font-weight:600" oninput="state.wcName=this.value">
-              <div id="wcNameErr" style="font-size:12px;color:var(--red)"></div>
-            </div>
-            <div style="display:flex;gap:6px">
-              <button class="btn btn-secondary btn-sm" onclick="wcCopyZone()">+ Copy zone</button>
-              <button class="btn btn-secondary btn-sm" onclick="wcAddZone()">+ Zone</button>
-              <button class="btn btn-danger btn-sm" id="wcDeleteBtn" onclick="wcDelete()">Delete</button>
-              <button class="btn btn-primary btn-sm" onclick="wcSave()">Save</button>
-            </div>
-          </div>
-          <div class="detail-body" id="wcDetail">
-            <div class="empty"><div class="empty-icon">📋</div>
-              <div class="empty-text">Select a config to edit</div></div>
-          </div>
-        </div>
+    <div class="sec-tab-panel hidden" id="status-tab-tado">
+      <div class="section-body" id="tadoStateBody">
+        <div class="empty"><div class="empty-icon">📡</div><div class="empty-text">Click Refresh to read current Tado configuration</div></div>
       </div>
     </div>
   </section>
 
-  <!-- ── PLANNINGS ── -->
-  <section class="section" id="sec-plannings">
+  <!-- ── CONFIGURATION ── -->
+  <section class="section" id="sec-config">
     <div class="section-header">
-      <h1>Plannings</h1>
+      <h1>Configuration</h1>
+      <button class="btn btn-primary btn-sm hidden" id="settingsSaveBtn" onclick="settingsSave()">Save</button>
     </div>
-    <div class="section-body">
-      <div class="split">
-        <div class="list-panel">
-          <div class="list-panel-header">
-            <span class="list-panel-title">Plannings</span>
-            <div style="display:flex;gap:4px">
-              <button class="btn btn-secondary btn-sm" onclick="plNew()">+ New</button>
-              <button class="btn btn-secondary btn-sm" onclick="plCopyFrom()">⎘ Copy</button>
+    <div class="sec-tabs-bar">
+      <button class="sec-tab-btn active" data-sec-tab="config:weekconfigs" onclick="showSecTab('config','weekconfigs')">Weekconfigs</button>
+      <button class="sec-tab-btn"        data-sec-tab="config:plannings"   onclick="showSecTab('config','plannings')">Plannings</button>
+      <button class="sec-tab-btn"        data-sec-tab="config:settings"    onclick="showSecTab('config','settings')">Settings</button>
+    </div>
+
+    <!-- Weekconfigs tab -->
+    <div class="sec-tab-panel" id="config-tab-weekconfigs">
+      <div class="section-body">
+        <div class="split">
+          <div class="list-panel">
+            <div class="list-panel-header">
+              <span class="list-panel-title">Configs</span>
+              <div style="display:flex;gap:4px">
+                <button class="btn btn-secondary btn-sm" onclick="wcNew()">+ New</button>
+                <button class="btn btn-secondary btn-sm" onclick="wcCopyFrom()">⎘ Copy</button>
+              </div>
             </div>
+            <div class="list-panel-body" id="wcList"></div>
           </div>
-          <div class="list-panel-body" id="plList"></div>
-        </div>
-        <div class="detail-panel">
-          <div class="detail-header" id="plDetailHeader" style="display:none">
-            <div style="display:flex;align-items:center;gap:10px;flex:1">
-              <input class="form-input" id="plDetailName" placeholder="Planning name"
-                style="max-width:200px;font-weight:600" oninput="state.plData.name=this.value">
-              <div id="plNameErr" style="font-size:12px;color:var(--red)"></div>
+          <div class="detail-panel">
+            <div class="detail-header" id="wcDetailHeader" style="display:none">
+              <div style="display:flex;align-items:center;gap:10px;flex:1">
+                <input class="form-input" id="wcDetailName" placeholder="Config name"
+                  style="max-width:200px;font-weight:600" oninput="state.wcName=this.value">
+                <div id="wcNameErr" style="font-size:12px;color:var(--red)"></div>
+              </div>
+              <div style="display:flex;gap:6px">
+                <button class="btn btn-secondary btn-sm" onclick="wcCopyZone()">+ Copy zone</button>
+                <button class="btn btn-secondary btn-sm" onclick="wcAddZone()">+ Zone</button>
+                <button class="btn btn-danger btn-sm" id="wcDeleteBtn" onclick="wcDelete()">Delete</button>
+                <button class="btn btn-primary btn-sm" onclick="wcSave()">Save</button>
+              </div>
             </div>
-            <div style="display:flex;gap:6px">
-              <button class="btn btn-danger btn-sm" id="plDeleteBtn" onclick="plDelete()">Delete</button>
-              <button class="btn btn-primary btn-sm" onclick="plSave()">Save</button>
+            <div class="detail-body" id="wcDetail">
+              <div class="empty"><div class="empty-icon">📋</div>
+                <div class="empty-text">Select a config to edit</div></div>
             </div>
-          </div>
-          <div id="plValidationBar"></div>
-          <div class="detail-body" id="plDetail">
-            <div class="empty"><div class="empty-icon">📅</div>
-              <div class="empty-text">Select a planning to edit</div></div>
           </div>
         </div>
       </div>
     </div>
-  </section>
 
-  <!-- ── SETTINGS ── -->
-  <section class="section" id="sec-settings">
-    <div class="section-header">
-      <h1>Settings</h1>
-      <button class="btn btn-primary btn-sm" onclick="settingsSave()">Save</button>
+    <!-- Plannings tab -->
+    <div class="sec-tab-panel hidden" id="config-tab-plannings">
+      <div class="section-body">
+        <div class="split">
+          <div class="list-panel">
+            <div class="list-panel-header">
+              <span class="list-panel-title">Plannings</span>
+              <div style="display:flex;gap:4px">
+                <button class="btn btn-secondary btn-sm" onclick="plNew()">+ New</button>
+                <button class="btn btn-secondary btn-sm" onclick="plCopyFrom()">⎘ Copy</button>
+              </div>
+            </div>
+            <div class="list-panel-body" id="plList"></div>
+          </div>
+          <div class="detail-panel">
+            <div class="detail-header" id="plDetailHeader" style="display:none">
+              <div style="display:flex;align-items:center;gap:10px;flex:1">
+                <input class="form-input" id="plDetailName" placeholder="Planning name"
+                  style="max-width:200px;font-weight:600" oninput="state.plData.name=this.value">
+                <div id="plNameErr" style="font-size:12px;color:var(--red)"></div>
+              </div>
+              <div style="display:flex;gap:6px">
+                <button class="btn btn-danger btn-sm" id="plDeleteBtn" onclick="plDelete()">Delete</button>
+                <button class="btn btn-primary btn-sm" onclick="plSave()">Save</button>
+              </div>
+            </div>
+            <div id="plValidationBar"></div>
+            <div class="detail-body" id="plDetail">
+              <div class="empty"><div class="empty-icon">📅</div>
+                <div class="empty-text">Select a planning to edit</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
-    <div class="section-body" style="max-width:520px">
 
-      <div class="card" style="margin-bottom:16px">
-        <div class="card-header"><span class="card-title">Scheduler loop</span></div>
-        <div class="card-body">
-          <div class="form-group">
-            <label class="form-label">Loop interval (minutes)</label>
-            <input class="form-input" type="number" min="1" id="set-loop-interval"
-              style="max-width:120px" placeholder="60">
-            <div class="form-hint">How often the scheduler runs in <code>--loop</code> mode.
-              Applies on the next cycle without restarting the container.</div>
+    <!-- Settings tab -->
+    <div class="sec-tab-panel hidden" id="config-tab-settings">
+      <div class="section-body" style="max-width:520px">
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-header"><span class="card-title">Scheduler loop</span></div>
+          <div class="card-body">
+            <div class="form-group">
+              <label class="form-label">Loop interval (minutes)</label>
+              <input class="form-input" type="number" min="1" id="set-loop-interval"
+                style="max-width:120px" placeholder="60">
+              <div class="form-hint">How often the scheduler runs in <code>--loop</code> mode.
+                Applies on the next cycle without restarting the container.</div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Default zone template</span>
+            <button class="btn btn-secondary btn-sm" onclick="settingsDzClear()">Clear</button>
+          </div>
+          <div class="card-body">
+            <div class="form-hint" style="margin-bottom:12px">
+              When adding a new zone to a weekconfig, this template is used as the starting
+              configuration instead of the bare minimum defaults.
+            </div>
+            <div id="set-dz-editor"></div>
+            <div id="set-settings-err" style="color:var(--red);font-size:12px;margin-top:8px"></div>
           </div>
         </div>
       </div>
-
-      <div class="card">
-        <div class="card-header">
-          <span class="card-title">Default zone template</span>
-          <button class="btn btn-secondary btn-sm" onclick="settingsDzClear()">Clear</button>
-        </div>
-        <div class="card-body">
-          <div class="form-hint" style="margin-bottom:12px">
-            When adding a new zone to a weekconfig, this template is used as the starting
-            configuration instead of the bare minimum defaults.
-          </div>
-          <div id="set-dz-editor"></div>
-          <div id="set-settings-err" style="color:var(--red);font-size:12px;margin-top:8px"></div>
-        </div>
-      </div>
-
     </div>
   </section>
 
@@ -652,17 +661,53 @@ function toast(msg, type="") {
 // NAV
 // ─────────────────────────────────────────────────────────────────────────
 function showSection(id) {
+  // Legacy aliases: route old section IDs to the right tab
+  const aliases = { weekconfigs: ['config','weekconfigs'], plannings: ['config','plannings'],
+                    settings: ['config','settings'] };
+  if (aliases[id]) {
+    _activateSec('config');
+    showSecTab('config', aliases[id][1]);
+    return;
+  }
+  _activateSec(id);
+  if (id === "status") { /* tab already shown; Planning is default on first open */ }
+  if (id === "config") { /* showSecTab will be called by caller or defaults to weekconfigs */
+    const cur = document.querySelector('#sec-config .sec-tab-btn.active');
+    if (!cur) showSecTab('config','weekconfigs');
+  }
+  if (id === "logs")    { loadLogs(); _startLogsAutoRefresh(); }
+  if (id === "service") loadServiceStatus();
+  if (id !== "logs")    _stopLogsAutoRefresh();
+}
+
+function _activateSec(id) {
   document.querySelectorAll(".section").forEach(s => s.classList.remove("active"));
-  document.querySelectorAll(".nav-item").forEach(n => n.classList.remove("active"));
-  document.getElementById("sec-" + id).classList.add("active");
-  document.querySelector(`[data-section="${id}"]`).classList.add("active");
-  if (id === "status")      loadStatus();
-  if (id === "weekconfigs") loadWeekconfigs();
-  if (id === "plannings")   loadPlannings();
-  if (id === "settings")    loadSettings();
-  if (id === "logs")        { loadLogs(); _startLogsAutoRefresh(); }
-  if (id === "service")     loadServiceStatus();
-  if (id !== "logs")        _stopLogsAutoRefresh();
+  document.querySelectorAll(".nav-item[data-section]").forEach(n => n.classList.remove("active"));
+  document.getElementById("sec-" + id)?.classList.add("active");
+  document.querySelector(`[data-section="${id}"]`)?.classList.add("active");
+}
+
+function showSecTab(secId, tabId) {
+  document.querySelectorAll(`#sec-${secId} .sec-tab-panel`).forEach(p => p.classList.add("hidden"));
+  document.getElementById(`${secId}-tab-${tabId}`)?.classList.remove("hidden");
+  document.querySelectorAll(`#sec-${secId} .sec-tab-btn`).forEach(b => b.classList.remove("active"));
+  document.querySelector(`[data-sec-tab="${secId}:${tabId}"]`)?.classList.add("active");
+  // Settings Save button visibility
+  const saveBtn = document.getElementById("settingsSaveBtn");
+  if (saveBtn) saveBtn.classList.toggle("hidden", !(secId === "config" && tabId === "settings"));
+  // Trigger data loads
+  if (secId === "status"  && tabId === "planning")    loadStatus();
+  if (secId === "status"  && tabId === "tado")        { /* user clicks Refresh */ }
+  if (secId === "config"  && tabId === "weekconfigs") loadWeekconfigs();
+  if (secId === "config"  && tabId === "plannings")   loadPlannings();
+  if (secId === "config"  && tabId === "settings")    loadSettings();
+}
+
+function statusTabRefresh() {
+  const active = document.querySelector('#sec-status .sec-tab-btn.active');
+  const tab    = active?.dataset.secTab?.split(':')[1] || 'planning';
+  if (tab === 'tado') loadTadoState();
+  else                loadStatus();
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -1937,6 +1982,78 @@ function _stopLogsAutoRefresh() {
   if (_logsAutoRefresh) { clearInterval(_logsAutoRefresh); _logsAutoRefresh = null; }
 }
 // NOT started here — started only when logs tab is opened
+
+// ─────────────────────────────────────────────────────────────────────────
+// TADO STATE (live read)
+// ─────────────────────────────────────────────────────────────────────────
+async function loadTadoState() {
+  const el = document.getElementById("tadoStateBody");
+  el.innerHTML = `<div class="empty"><div class="empty-icon">⏳</div><div class="empty-text">Reading from Tado…</div></div>`;
+  try {
+    const { data } = await api("GET", "/tado/zones");
+    if (data.error) { el.innerHTML = `<div class="alert alert-error">${data.error}</div>`; return; }
+    const zones = data.zones || {};
+    if (!Object.keys(zones).length) {
+      el.innerHTML = `<div class="empty"><div class="empty-icon">📡</div><div class="empty-text">No zones returned</div></div>`;
+      return;
+    }
+    let html = '';
+    if (data.errors?.length) html += `<div class="alert alert-warn" style="margin-bottom:12px">Some zones could not be read: ${data.errors.join(', ')}</div>`;
+    html += '<div class="zone-list">';
+    for (const [zname, zcfg] of Object.entries(zones)) html += _tadoZoneCard(zname, zcfg);
+    html += '</div>';
+    el.innerHTML = html;
+  } catch(e) {
+    el.innerHTML = `<div class="alert alert-error">${e.message}</div>`;
+  }
+}
+
+function _tadoZoneCard(zname, zcfg) {
+  const hasTT = !!zcfg.timetable;
+  const tt    = zcfg.timetable || '';
+  const keys  = TT_KEYS[tt] || [];
+  let slotsHtml = '';
+  if (hasTT) {
+    const tabBtns = keys.length > 1
+      ? `<div class="tt-tabs">${keys.map((k,i) =>
+          `<button class="tt-tab${i===0?' active':''}" onclick="(function(k,btn){document.querySelectorAll('#tado-z-${zname} .tt-pane').forEach(p=>p.style.display='none');document.getElementById('tado-z-${zname}-'+k).style.display='';document.querySelectorAll('#tado-z-${zname} .tt-tab').forEach(b=>b.classList.remove('active'));btn.classList.add('active')})('${k}',this)">${k}</button>`
+        ).join('')}</div>` : '';
+    slotsHtml = tabBtns + keys.map((k,i) => `
+      <div class="tt-pane" id="tado-z-${zname}-${k}" style="${i>0?'display:none':''}">
+        <table class="slots-table">
+          <tr><th>Start</th><th>Temp °C</th></tr>
+          ${(zcfg[k]||[]).map(s=>`<tr>
+            <td style="font-family:var(--mono);font-size:12px">${s.start}</td>
+            <td style="font-family:var(--mono);font-size:12px">${s.temp != null ? s.temp+'°C' : '—'}</td>
+          </tr>`).join('')}
+        </table>
+      </div>`).join('');
+  }
+  const preheatLabel = zcfg.preheat || '—';
+  const earlyLabel   = zcfg.early_start ? 'Start before' : 'Start after';
+  const awayLabel    = zcfg.away_enabled !== false ? 'Away temp' : 'No frost';
+  return `
+  <div class="zone-card" id="tado-z-${zname}">
+    <div class="zone-card-header" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'">
+      <span class="zone-card-title">${zname}</span>
+      <span style="font-size:12px;color:var(--muted)">${hasTT ? tt : 'Away only'}</span>
+    </div>
+    <div class="zone-card-body">
+      ${hasTT ? slotsHtml : ''}
+      ${hasTT ? `
+      <div class="divider" style="margin:10px 0 8px"></div>
+      <div class="form-row" style="gap:24px;font-size:13px;margin-bottom:0">
+        <div><div class="form-label">Preheat before arrival</div>${preheatLabel}</div>
+        <div><div class="form-label">Early start</div>${earlyLabel}</div>
+      </div>` : ''}
+      <div class="divider" style="margin:10px 0 8px"></div>
+      <div class="form-row" style="gap:24px;font-size:13px;margin-bottom:0">
+        <div><div class="form-label">Away mode</div>${awayLabel}</div>
+        ${zcfg.away_enabled !== false ? `<div><div class="form-label">Away temp</div>${zcfg.away_temp != null ? zcfg.away_temp+'°C' : '—'}</div>` : ''}
+      </div>
+    </div>
+  </div>`;
+}
 
 // ─────────────────────────────────────────────────────────────────────────
 // INIT — preload weekconfigs so config selects work in plannings
