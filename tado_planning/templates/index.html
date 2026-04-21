@@ -1016,8 +1016,35 @@ function renderZoneCard(zname, zcfg) {
       </div>
     </div>
     <div class="zone-card-body" id="zone-body-${zname}">
-      <div class="form-section-title">Away</div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label class="form-label">Timetable</label>
+        <select class="form-select" onchange="wcSetTimetable('${zname}',this.value)">
+          <option value=""${!hasTT?' selected':''}>Away only (no timetable)</option>
+          ${["Mon-Sun","Mon-Fri, Sat, Sun","Mon, ..., Sun"].map(t =>
+            `<option${t===tt?' selected':''}>${t}</option>`
+          ).join("")}
+        </select>
+      </div>
+      ${hasTT ? slotsHtml : ''}
+      ${hasTT ? `
+      <div class="form-section-title">Schedule</div>
       <div class="form-row" style="margin-bottom:16px">
+        <div class="form-group">
+          <label class="form-label">Preheat before arrival</label>
+          <select class="form-select" onchange="wcSetMeta('${zname}','preheat',this.value)">
+            ${PREHEAT_OPTS.map(p => `<option${(zcfg.preheat||'ECO')===p?' selected':''}>${p}</option>`).join("")}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Early start</label>
+          <select class="form-select" onchange="wcSetMeta('${zname}','early_start',this.value==='before')">
+            <option value="before"${zcfg.early_start?' selected':''}>Start before</option>
+            <option value="after"${!zcfg.early_start?' selected':''}>Start after</option>
+          </select>
+        </div>
+      </div>` : ''}
+      <div class="form-section-title">Away</div>
+      <div class="form-row" style="margin-bottom:12px">
         <div class="form-group">
           <label class="form-label">Away mode</label>
           <select class="form-select" onchange="wcSetMeta('${zname}','away_enabled',this.value==='away_temp');document.getElementById('wc-away-temp-${zname}').style.display=this.value==='away_temp'?'':'none'">
@@ -1032,35 +1059,6 @@ function renderZoneCard(zname, zcfg) {
             oninput="wcSetMeta('${zname}','away_temp',+this.value)">
         </div>
       </div>
-      <div class="form-section-title">Schedule</div>
-      <div class="form-row" style="margin-bottom:8px">
-        <div class="form-group">
-          <label class="form-label">Timetable</label>
-          <select class="form-select" onchange="wcSetTimetable('${zname}',this.value)">
-            <option value=""${!hasTT?' selected':''}>Away only (no timetable)</option>
-            ${["Mon-Sun","Mon-Fri, Sat, Sun","Mon, ..., Sun"].map(t =>
-              `<option${t===tt?' selected':''}>${t}</option>`
-            ).join("")}
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Preheat before arrival</label>
-          <select class="form-select" onchange="wcSetMeta('${zname}','preheat',this.value)">
-            ${PREHEAT_OPTS.map(p => `<option${(zcfg.preheat||'ECO')===p?' selected':''}>${p}</option>`).join("")}
-          </select>
-        </div>
-      </div>
-      <div class="form-row" style="margin-bottom:12px">
-        <div class="form-group">
-          <label class="form-label">Early start</label>
-          <select class="form-select" onchange="wcSetMeta('${zname}','early_start',this.value==='before')">
-            <option value="before"${zcfg.early_start?' selected':''}>Start before</option>
-            <option value="after"${!zcfg.early_start?' selected':''}>Start after</option>
-          </select>
-        </div>
-        <div class="form-group"></div>
-      </div>
-      ${hasTT ? slotsHtml : ''}
     </div>
   </div>`;
 }
@@ -1786,8 +1784,35 @@ function renderDzCard(cfg) {
   }
 
   return `
-    <div class="form-section-title">Away</div>
+    <div class="form-group" style="margin-bottom:12px">
+      <label class="form-label">Timetable</label>
+      <select class="form-select" onchange="dzSetTimetable(this.value)">
+        <option value=""${!hasTT?' selected':''}>Away only (no timetable)</option>
+        ${["Mon-Sun","Mon-Fri, Sat, Sun","Mon, ..., Sun"].map(t =>
+          `<option${t===tt?' selected':''}>${t}</option>`
+        ).join("")}
+      </select>
+    </div>
+    ${hasTT ? slotsHtml : ''}
+    ${hasTT ? `
+    <div class="form-section-title">Schedule</div>
     <div class="form-row" style="margin-bottom:16px">
+      <div class="form-group">
+        <label class="form-label">Preheat before arrival</label>
+        <select class="form-select" onchange="dzSetMeta('preheat',this.value)">
+          ${PREHEAT_OPTS.map(p => `<option${(cfg.preheat||'ECO')===p?' selected':''}>${p}</option>`).join("")}
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Early start</label>
+        <select class="form-select" onchange="dzSetMeta('early_start',this.value==='before')">
+          <option value="before"${cfg.early_start?' selected':''}>Start before</option>
+          <option value="after"${!cfg.early_start?' selected':''}>Start after</option>
+        </select>
+      </div>
+    </div>` : ''}
+    <div class="form-section-title">Away</div>
+    <div class="form-row" style="margin-bottom:12px">
       <div class="form-group">
         <label class="form-label">Away mode</label>
         <select class="form-select" onchange="dzSetMeta('away_enabled',this.value==='away_temp');document.getElementById('dz-away-temp').style.display=this.value==='away_temp'?'':'none'">
@@ -1801,36 +1826,7 @@ function renderDzCard(cfg) {
           value="${cfg.away_temp ?? 15}"
           oninput="dzSetMeta('away_temp',+this.value)">
       </div>
-    </div>
-    <div class="form-section-title">Schedule</div>
-    <div class="form-row" style="margin-bottom:8px">
-      <div class="form-group">
-        <label class="form-label">Timetable</label>
-        <select class="form-select" onchange="dzSetTimetable(this.value)">
-          <option value=""${!hasTT?' selected':''}>Away only (no timetable)</option>
-          ${["Mon-Sun","Mon-Fri, Sat, Sun","Mon, ..., Sun"].map(t =>
-            `<option${t===tt?' selected':''}>${t}</option>`
-          ).join("")}
-        </select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Preheat before arrival</label>
-        <select class="form-select" onchange="dzSetMeta('preheat',this.value)">
-          ${PREHEAT_OPTS.map(p => `<option${(cfg.preheat||'ECO')===p?' selected':''}>${p}</option>`).join("")}
-        </select>
-      </div>
-    </div>
-    <div class="form-row" style="margin-bottom:12px">
-      <div class="form-group">
-        <label class="form-label">Early start</label>
-        <select class="form-select" onchange="dzSetMeta('early_start',this.value==='before')">
-          <option value="before"${cfg.early_start?' selected':''}>Start before</option>
-          <option value="after"${!cfg.early_start?' selected':''}>Start after</option>
-        </select>
-      </div>
-      <div class="form-group"></div>
-    </div>
-    ${hasTT ? slotsHtml : ''}`;
+    </div>`;
 }
 
 function dzShowTab(key, btn) {
