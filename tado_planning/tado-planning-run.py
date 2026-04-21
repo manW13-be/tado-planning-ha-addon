@@ -416,10 +416,10 @@ def active_plannings_at(plannings: list, now: datetime.datetime) -> list:
         s = _parse_dt_safe(p.get("start"))
         e = _parse_dt_safe(p.get("end"))
         if s is not None:
-            if s <= now and (e is None or e >= now):
+            if s <= now and (e is None or e > now):
                 group1.append(p)
         elif e is not None:
-            if e >= now:
+            if e > now:
                 group2.append(p)
         else:
             group3.append(p)
