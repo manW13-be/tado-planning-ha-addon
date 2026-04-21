@@ -119,6 +119,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text);
 .form-input.error { border-color: var(--red); }
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .form-hint { font-size: 11.5px; color: var(--muted); margin-top: 4px; }
+.form-section-title { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid var(--border); }
 .form-error { font-size: 12px; color: var(--red); margin-top: 4px; }
 
 /* ── STATUS CARDS ── */
@@ -976,7 +977,7 @@ function renderWcDetail() {
 
 function renderZoneCard(zname, zcfg) {
   const hasTT = !!zcfg.timetable;
-  const tt    = zcfg.timetable || "Mon-Sun";
+  const tt    = zcfg.timetable || "";
   const keys  = TT_KEYS[tt] || ["Mon-Sun"];
 
   let slotsHtml = "";
@@ -1015,7 +1016,24 @@ function renderZoneCard(zname, zcfg) {
       </div>
     </div>
     <div class="zone-card-body" id="zone-body-${zname}">
-      <div class="form-row" style="margin-bottom:12px">
+      <div class="form-section-title">Away</div>
+      <div class="form-row" style="margin-bottom:16px">
+        <div class="form-group">
+          <label class="form-label">Away mode</label>
+          <select class="form-select" onchange="wcSetMeta('${zname}','away_enabled',this.value==='away_temp');document.getElementById('wc-away-temp-${zname}').style.display=this.value==='away_temp'?'':'none'">
+            <option value="away_temp"${zcfg.away_enabled!==false?' selected':''}>Away temp</option>
+            <option value="no_frost"${zcfg.away_enabled===false?' selected':''}>No frost</option>
+          </select>
+        </div>
+        <div class="form-group" id="wc-away-temp-${zname}"${zcfg.away_enabled===false?' style="display:none"':''}>
+          <label class="form-label">Away temp (°C)</label>
+          <input class="form-input" type="number" step="0.5"
+            value="${zcfg.away_temp ?? 15}"
+            oninput="wcSetMeta('${zname}','away_temp',+this.value)">
+        </div>
+      </div>
+      <div class="form-section-title">Schedule</div>
+      <div class="form-row" style="margin-bottom:8px">
         <div class="form-group">
           <label class="form-label">Timetable</label>
           <select class="form-select" onchange="wcSetTimetable('${zname}',this.value)">
@@ -1026,31 +1044,21 @@ function renderZoneCard(zname, zcfg) {
           </select>
         </div>
         <div class="form-group">
-          <label class="form-label">Away temp (°C)</label>
-          <input class="form-input" type="number" step="0.5"
-            value="${zcfg.away_temp ?? 15}"
-            oninput="wcSetMeta('${zname}','away_temp',+this.value)">
-        </div>
-      </div>
-      <div class="form-row" style="margin-bottom:12px">
-        <div class="form-group">
-          <label class="form-label">Preheat</label>
+          <label class="form-label">Preheat before arrival</label>
           <select class="form-select" onchange="wcSetMeta('${zname}','preheat',this.value)">
             ${PREHEAT_OPTS.map(p => `<option${(zcfg.preheat||'ECO')===p?' selected':''}>${p}</option>`).join("")}
           </select>
         </div>
-        <div class="form-group" style="display:flex;flex-direction:column;justify-content:flex-end">
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:4px">
-            <input type="checkbox" ${zcfg.away_enabled!==false?'checked':''}
-              onchange="wcSetMeta('${zname}','away_enabled',this.checked)">
-            <span class="form-label" style="margin:0">Away enabled</span>
-          </label>
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-            <input type="checkbox" ${zcfg.early_start?'checked':''}
-              onchange="wcSetMeta('${zname}','early_start',this.checked)">
-            <span class="form-label" style="margin:0">Early start</span>
-          </label>
+      </div>
+      <div class="form-row" style="margin-bottom:12px">
+        <div class="form-group">
+          <label class="form-label">Early start</label>
+          <select class="form-select" onchange="wcSetMeta('${zname}','early_start',this.value==='before')">
+            <option value="before"${zcfg.early_start?' selected':''}>Start before</option>
+            <option value="after"${!zcfg.early_start?' selected':''}>Start after</option>
+          </select>
         </div>
+        <div class="form-group"></div>
       </div>
       ${hasTT ? slotsHtml : ''}
     </div>
@@ -1778,7 +1786,24 @@ function renderDzCard(cfg) {
   }
 
   return `
-    <div class="form-row" style="margin-bottom:12px">
+    <div class="form-section-title">Away</div>
+    <div class="form-row" style="margin-bottom:16px">
+      <div class="form-group">
+        <label class="form-label">Away mode</label>
+        <select class="form-select" onchange="dzSetMeta('away_enabled',this.value==='away_temp');document.getElementById('dz-away-temp').style.display=this.value==='away_temp'?'':'none'">
+          <option value="away_temp"${cfg.away_enabled!==false?' selected':''}>Away temp</option>
+          <option value="no_frost"${cfg.away_enabled===false?' selected':''}>No frost</option>
+        </select>
+      </div>
+      <div class="form-group" id="dz-away-temp"${cfg.away_enabled===false?' style="display:none"':''}>
+        <label class="form-label">Away temp (°C)</label>
+        <input class="form-input" type="number" step="0.5"
+          value="${cfg.away_temp ?? 15}"
+          oninput="dzSetMeta('away_temp',+this.value)">
+      </div>
+    </div>
+    <div class="form-section-title">Schedule</div>
+    <div class="form-row" style="margin-bottom:8px">
       <div class="form-group">
         <label class="form-label">Timetable</label>
         <select class="form-select" onchange="dzSetTimetable(this.value)">
@@ -1789,31 +1814,21 @@ function renderDzCard(cfg) {
         </select>
       </div>
       <div class="form-group">
-        <label class="form-label">Away temp (°C)</label>
-        <input class="form-input" type="number" step="0.5"
-          value="${cfg.away_temp ?? 15}"
-          oninput="dzSetMeta('away_temp',+this.value)">
-      </div>
-    </div>
-    <div class="form-row" style="margin-bottom:12px">
-      <div class="form-group">
-        <label class="form-label">Preheat</label>
+        <label class="form-label">Preheat before arrival</label>
         <select class="form-select" onchange="dzSetMeta('preheat',this.value)">
           ${PREHEAT_OPTS.map(p => `<option${(cfg.preheat||'ECO')===p?' selected':''}>${p}</option>`).join("")}
         </select>
       </div>
-      <div class="form-group" style="display:flex;flex-direction:column;justify-content:flex-end">
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:4px">
-          <input type="checkbox" ${cfg.away_enabled!==false?'checked':''}
-            onchange="dzSetMeta('away_enabled',this.checked)">
-          <span class="form-label" style="margin:0">Away enabled</span>
-        </label>
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-          <input type="checkbox" ${cfg.early_start?'checked':''}
-            onchange="dzSetMeta('early_start',this.checked)">
-          <span class="form-label" style="margin:0">Early start</span>
-        </label>
+    </div>
+    <div class="form-row" style="margin-bottom:12px">
+      <div class="form-group">
+        <label class="form-label">Early start</label>
+        <select class="form-select" onchange="dzSetMeta('early_start',this.value==='before')">
+          <option value="before"${cfg.early_start?' selected':''}>Start before</option>
+          <option value="after"${!cfg.early_start?' selected':''}>Start after</option>
+        </select>
       </div>
+      <div class="form-group"></div>
     </div>
     ${hasTT ? slotsHtml : ''}`;
 }
