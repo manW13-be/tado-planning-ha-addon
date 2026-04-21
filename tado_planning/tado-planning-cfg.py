@@ -269,10 +269,10 @@ def _active_plannings_at(plannings: list, t: datetime.datetime) -> list:
         s = _parse_dt(p.get("start"))
         e = _parse_dt(p.get("end"))
         if s is not None:
-            if s <= t and (e is None or e >= t):
+            if s <= t and (e is None or e > t):
                 group1.append(p)
         elif e is not None:
-            if e >= t:
+            if e > t:
                 group2.append(p)
         else:
             group3.append(p)
@@ -394,7 +394,7 @@ def get_status() -> dict:
             e = _parse_dt(p.get("end"))
             if s is not None and s > now:
                 status = "upcoming"
-            elif e is not None and e < now:
+            elif e is not None and e <= now:
                 status = "ended"
             else:
                 status = "active"
@@ -499,7 +499,6 @@ def get_timeline(days: int = 14) -> dict:
                     dt = _parse_dt(val)
                     if now <= dt <= end:
                         moments.add(dt)
-                        moments.add(dt + datetime.timedelta(minutes=1))
                         boundaries.setdefault(dt, []).append(
                             {"planning": p["name"], "type": btype})
 
@@ -525,7 +524,7 @@ def get_timeline(days: int = 14) -> dict:
                     # Only add moment if the planning is active at that datetime
                     if p_start and dt < p_start:
                         continue
-                    if p_end and dt > p_end:
+                    if p_end and dt >= p_end:
                         continue
                     if now <= dt <= end:
                         moments.add(dt)
@@ -536,11 +535,7 @@ def get_timeline(days: int = 14) -> dict:
         # --- Build columns ---
         columns = []
         for i, t in enumerate(sorted_moments):
-            bds = []
-            # Check boundaries at t or at t-1min (for "after end" moments)
-            for bd_dt, bd_list in boundaries.items():
-                if t == bd_dt or t == bd_dt + datetime.timedelta(minutes=1):
-                    bds.extend(bd_list)
+            bds = boundaries.get(t, [])
             columns.append({
                 "dt":         t.strftime("%Y-%m-%d %H:%M"),
                 "label":      f"{_DAY_ABR[t.weekday()]} {t.strftime('%d/%m')}  {t.strftime('%H:%M')}",
