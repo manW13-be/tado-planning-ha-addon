@@ -87,12 +87,12 @@ body { font-family: var(--font); background: var(--bg); color: var(--text);
 .item-row:hover { background: var(--bg); }
 .item-row.active { background: #eff6ff; }
 .item-name { font-weight: 500; font-size: 13.5px; }
-.item-meta { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
+.item-meta { font-size: 11.5px; color: var(--muted); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .item-actions { display: flex; gap: 4px; opacity: 0; transition: opacity .1s; }
 .item-row:hover .item-actions { opacity: 1; }
 
 /* ── TWO-COLUMN LAYOUT ── */
-.split { display: grid; grid-template-columns: 260px 1fr; gap: 20px; }
+.split { display: grid; grid-template-columns: 320px 1fr; gap: 20px; }
 .list-panel { background: var(--surface); border: 1px solid var(--border);
               border-radius: var(--radius); overflow: hidden; }
 .list-panel-header { padding: 12px 14px; border-bottom: 1px solid var(--border);
@@ -255,7 +255,9 @@ body { font-family: var(--font); background: var(--bg); color: var(--text);
 .dtp-cal-day { font-size: 12px; text-align: center; padding: 4px 2px; border-radius: 4px;
                cursor: pointer; border: none; background: none; color: var(--text); }
 .dtp-cal-day:hover { background: var(--bg); }
-.dtp-cal-day.today { font-weight: 700; color: var(--accent); }
+.dtp-cal-day.today { font-weight: 700; color: var(--accent); box-shadow: inset 0 0 0 2px var(--accent); border-radius: 4px; }
+.dtp-cal-sel { font-size: 13px; font-weight: 600; border: none; background: transparent; cursor: pointer; padding: 2px 4px; border-radius: 4px; color: inherit; }
+.dtp-cal-sel:hover { background: var(--bg); }
 .dtp-cal-day.selected { background: var(--accent); color: #fff; font-weight: 600; }
 .dtp-cal-day.other-month { color: #ccc; }
 .dtp-cal-day:disabled { color: #ddd; cursor: default; }
@@ -1496,19 +1498,38 @@ function dtpRenderCal(id) {
     grid += `<button class="dtp-cal-day other-month" disabled>${d}</button>`;
   }
 
+  const monthOpts = MONS.map((m, i) =>
+    `<option value="${i}"${i === s.month ? ' selected' : ''}>${m}</option>`).join('');
+  const yearMin = s.year - 3; const yearMax = s.year + 5;
+  let yearOpts = '';
+  for (let y = yearMin; y <= yearMax; y++)
+    yearOpts += `<option value="${y}"${y === s.year ? ' selected' : ''}>${y}</option>`;
+
   cal.innerHTML = `
     <div class="dtp-cal-nav">
-      <button onclick="dtpNavMonth('${id}',-1)">‹</button>
-      <span class="dtp-cal-title">${MONS[s.month]} ${s.year}</span>
-      <button onclick="dtpNavMonth('${id}',1)">›</button>
+      <button type="button" onclick="dtpNavMonth(event,'${id}',-1)">‹</button>
+      <select class="dtp-cal-sel" onchange="dtpSetMonth(event,'${id}',+this.value)">${monthOpts}</select>
+      <select class="dtp-cal-sel" onchange="dtpSetYear(event,'${id}',+this.value)">${yearOpts}</select>
+      <button type="button" onclick="dtpNavMonth(event,'${id}',1)">›</button>
     </div>
     <div class="dtp-cal-grid">${grid}</div>`;
 }
-function dtpNavMonth(id, delta) {
+function dtpNavMonth(ev, id, delta) {
+  ev.stopPropagation();
   const s = _dtpGetState(id);
   s.month += delta;
   if (s.month > 11) { s.month = 0; s.year++; }
   if (s.month < 0)  { s.month = 11; s.year--; }
+  dtpRenderCal(id);
+}
+function dtpSetMonth(ev, id, month) {
+  ev.stopPropagation();
+  _dtpGetState(id).month = month;
+  dtpRenderCal(id);
+}
+function dtpSetYear(ev, id, year) {
+  ev.stopPropagation();
+  _dtpGetState(id).year = year;
   dtpRenderCal(id);
 }
 function dtpPickDay(id, iso) {
@@ -1520,10 +1541,10 @@ function dtpPickDay(id, iso) {
   // update button label
   const btn = document.querySelector(`#dtp-${id} .dtp-date-btn`);
   if (btn) { btn.textContent = iso; btn.classList.add('has-val'); }
-  // sync cal state to selected date
+  // sync cal state to selected date and close
   const ref = new Date(iso);
   _dtpState[id] = { year: ref.getFullYear(), month: ref.getMonth() };
-  dtpRenderCal(id);
+  document.querySelectorAll('.dtp-cal.open').forEach(c => c.classList.remove('open'));
 }
 function dtpClear(id) {
   const field = id === 'pl-start' ? 'start' : 'end';
