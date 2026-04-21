@@ -34,14 +34,16 @@ Automated Tado heating schedule management for households with a **shared custod
 
 ## Why tado-planning
 
-Tado is a smart heating system, and Home Assistant has solid Tado integration — but both share the same fundamental limitation: **schedules are based on a seven-day week**. There is no built-in way to express a pattern that repeats every two weeks, or to define exceptions that span arbitrary periods.
+Tado is a nice smart heating cntrol system but it has, to my eyes, a fundamental limitation: **schedules are based on a seven-day week**. There is no built-in way to express a pattern that repeats every two weeks, or to define exceptions that span arbitrary periods, neither facilities to load configurations. Home assistant or add-on's don't bring improvement to this.
 
-tado-planning is not an alternative interface to control Tado. It is a purpose-built layer that sits on top of Tado's API to work around this limitation, adding:
+tado-planning is not an alternative interface to control Tado devices in their known usual functinality. It is a purpose-built layer that sits on top of Tado's API to work around this limitation above mentioned, adding:
 
 - **Two-week cycle support** — odd and even ISO weeks (or a sequential two-week count from a reference date) can carry different heating configurations
 - **Exception periods** — any planning can define a start/end window during which it overrides the standard cycle, for any duration
 - **Two independent configuration levels** — allowing two separate sets of heating rules to coexist on the same zones simultaneously
-- **Web configurator** — a built-in Flask UI to manage all configurations without editing JSON files by hand
+- **Web configurator** — a built-in Flask UI to manage the week configurations (like Tado does) and the configuration switch plannings
+
+It can be setup as a Home Assistant add-on or as a MacOS service.
 
 ---
 
@@ -73,26 +75,32 @@ tado-planning is not an alternative interface to control Tado. It is a purpose-b
                     └─────────────┘
 ```
 
-Every hour the scheduler checks which configuration should be active, compares it to what is already set on Tado, and only pushes changes when something has actually changed.
+Every hour (parameter) the scheduler checks which configuration should be active, compares it to what is already set on Tado, and only pushes changes when something has actually changed.
 
 ---
 
 ## Key concepts
 
-### Plannings
-
-A **planning** defines *when* to switch heating configurations. It contains a list of events, each specifying a weekday, a time, a week parity, a level, and which weekconfig to apply.
-
-There are two kinds of plannings:
-
-- **Standard planning** — the baseline cycle (`start: null`, `end: null`), always active. Exactly one must exist.
-- **Exception plannings** — define a `start` and/or `end` date/time. During that window they take precedence over the standard planning. Once the period ends, the standard planning resumes automatically. Multiple exceptions can coexist — the one whose `start` is most recent wins.
-
 ### Weekconfigs
 
-A **weekconfig** defines *what* to apply to Tado: temperatures, time slots, timetable type, away mode, preheat — per zone. Only the zones listed in a weekconfig are touched when it is applied.
+A **weekconfig** defines *what* to apply to Tado: timetable type, time slots, temperatures, away mode, preheat — per zone. Only the zones listed in a weekconfig are touched when it is applied. It is basically what the native Tado interface allows to do.
 
-All weekconfigs are stored together in `weekconfigs.json`.
+The difference with Tado is that you can define multiple weekconfigs, one for the school odd week, one for the school even week, one for a home holiday week, one for the total absence week, ..., one for the fornightly visit of an external, ...
+
+The weekconfigs dont need to be exhaustive on the zones. They also dont need to be exhaustive on the config for a zone. They can define the temperature scheduling or only the extra paramaters.
+
+### Plannings
+
+A **planning** defines *when* to switch weekconfigs. It first defines the type of planning among the most seekes two-weeks-iso (odd week, even week), the alternate two-weeks-seq (define a date as start point, then it does week 1, week 2, week 1, ...) and the single week. It then defines switch events, each specifying a weekday, a time, a week parity if relevant, a level, and which weekconfig to apply.
+
+There can be multiple plannings co-existing and potentially interfering.
+Indeed, each plannig defines an applicable period with a start date/time and an end date/time. Both can be ommitted. 
+There is a precedence rule in place.
+The only rule is that two plannings dont share the exact same setting start and end date/time.
+
+With this, we can consider:
+- **Standard planning** — the baseline cycle (`start: null`, `end: null`), always active.
+- **Exception plannings** — define a `start` and/or `end` date/time. During that window they take precedence over the standard planning. Once the period ends, the standard planning resumes automatically. Multiple exceptions can coexist — the one which `start` is defined and most future wins, in case of both same start then the one which `end` is defined and most future wins.
 
 ### Configuration levels
 
