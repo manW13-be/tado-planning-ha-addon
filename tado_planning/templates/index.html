@@ -876,7 +876,7 @@ function normalizeZone(zcfg) {
     if (!("away_enabled" in zcfg)) zcfg.away_enabled = true;
     if (!("preheat"      in zcfg)) zcfg.preheat      = "ECO";
   }
-  if (!("early_start" in zcfg)) zcfg.early_start = false;
+  if ("timetable" in zcfg && !("early_start" in zcfg)) zcfg.early_start = false;
   return zcfg;
 }
 

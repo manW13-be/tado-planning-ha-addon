@@ -844,16 +844,25 @@ def apply_zone_config(tado: Tado, zone_id: int, zone_key: str, zone_cfg: dict):
             log(f"[OK]   '{zone_key}' away: no frost — Tado frost protection left untouched", 1)
 
 
+_AWAY_KEYS = ("away_temp", "away_enabled", "preheat")
+
 def merge_zone_configs(cfg_l1: dict, cfg_l2: dict | None) -> dict:
     """
     Merge level-1 and level-2 zone configs into a single virtual config.
-    Level-2 keys override level-1 keys where present.
+    If cfg_l2 has a timetable: full override (all L2 keys replace L1).
+    If cfg_l2 is away-only (no timetable): only merge away fields
+    (away_temp, away_enabled, preheat) — never touch early_start or schedule keys.
     If cfg_l2 is None, returns a copy of cfg_l1 unchanged.
     """
     import copy
     merged = copy.deepcopy(cfg_l1)
     if cfg_l2:
-        merged.update(copy.deepcopy(cfg_l2))
+        if "timetable" in cfg_l2:
+            merged.update(copy.deepcopy(cfg_l2))
+        else:
+            for k in _AWAY_KEYS:
+                if k in cfg_l2:
+                    merged[k] = copy.deepcopy(cfg_l2[k])
     return merged
 
 
