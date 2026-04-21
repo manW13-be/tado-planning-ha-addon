@@ -1485,7 +1485,7 @@ function dtpRenderCal(id) {
   }
   for (let d = 1; d <= daysInMonth; d++) {
     const dt = new Date(s.year, s.month, d);
-    const iso = dt.toISOString().slice(0,10);
+    const iso = `${s.year}-${String(s.month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const isSel = iso === selDate;
     const isToday = dt.getTime() === today.getTime();
     grid += `<button class="dtp-cal-day${isSel?' selected':''}${isToday&&!isSel?' today':''}"
