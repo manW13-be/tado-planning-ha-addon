@@ -938,7 +938,11 @@ def print_config_summary(config_name: str, zone_cfg_map: dict, level: int):
 # ---------------------------------------------------------------------------
 
 def cmd_tado_zones():
-    """Read current zone configurations from Tado and print as JSON."""
+    """Read current zone configurations from Tado and print as JSON on stdout.
+    All log/auth messages are redirected to stderr so stdout stays clean."""
+    import sys as _sys
+    _stdout, _sys.stdout = _sys.stdout, _sys.stderr   # redirect log() output to stderr
+
     _TT_ID_TO_NAME   = {0: "Mon-Sun", 1: "Mon-Fri, Sat, Sun", 2: "Mon, ..., Sun"}
     _TT_KEYS         = {
         "Mon-Sun":           ["Mon-Sun"],
@@ -987,6 +991,7 @@ def cmd_tado_zones():
     out = {"zones": result}
     if errors:
         out["errors"] = errors
+    _sys.stdout = _stdout          # restore stdout before printing JSON
     print(json.dumps(out))
 
 
