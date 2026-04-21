@@ -774,7 +774,7 @@ def zone_needs_update(tado: Tado, zone_id: int, zone_cfg: dict, zone_key: str) -
                 log(f"[DIFF]  '{zone_key}' blocks {day_type} differ", 1)
                 return True
 
-    if "early_start" in zone_cfg:
+    if "early_start" in zone_cfg and "timetable" in zone_cfg:
         result = tado_get(tado, f"zones/{zone_id}/earlyStart")
         actual = result.get("enabled") if isinstance(result, dict) else None
         if actual != zone_cfg["early_start"]:
@@ -782,25 +782,25 @@ def zone_needs_update(tado: Tado, zone_id: int, zone_cfg: dict, zone_key: str) -
             return True
 
     if any(k in zone_cfg for k in ("away_temp", "away_enabled", "preheat")):
-        preheat_map = {
-            "off": "OFF", "eco": "ECO",
-            "équilibre": "BALANCE", "balance": "BALANCE",
-            "confort": "COMFORT",   "comfort": "COMFORT",
-        }
-        preheat_level = preheat_map.get(zone_cfg.get("preheat", "eco").lower(), "ECO")
-        away_temp     = float(zone_cfg.get("away_temp", 15.0))
-        away_enabled  = zone_cfg.get("away_enabled", True)
-        if not away_enabled:
-            preheat_level = "OFF"
-        result   = tado_get(tado, f"zones/{zone_id}/awayConfiguration")
-        actual_t = result.get("minimumAwayTemperature", {}).get("celsius") if isinstance(result, dict) else None
-        actual_p = result.get("preheatingLevel") if isinstance(result, dict) else None
-        if actual_t is None or abs(float(actual_t) - away_temp) > 0.01:
-            log(f"[DIFF]  '{zone_key}' away_temp: current={actual_t}, wanted={away_temp}", 1)
-            return True
-        if actual_p != preheat_level:
-            log(f"[DIFF]  '{zone_key}' preheat: current={actual_p}, wanted={preheat_level}", 1)
-            return True
+        away_enabled = zone_cfg.get("away_enabled", True)
+        if away_enabled:
+            preheat_map = {
+                "off": "OFF", "eco": "ECO",
+                "équilibre": "BALANCE", "balance": "BALANCE",
+                "confort": "COMFORT",   "comfort": "COMFORT",
+            }
+            preheat_level = preheat_map.get(zone_cfg.get("preheat", "eco").lower(), "ECO")
+            away_temp     = float(zone_cfg.get("away_temp", 15.0))
+            result   = tado_get(tado, f"zones/{zone_id}/awayConfiguration")
+            actual_t = result.get("minimumAwayTemperature", {}).get("celsius") if isinstance(result, dict) else None
+            actual_p = result.get("preheatingLevel") if isinstance(result, dict) else None
+            if actual_t is None or abs(float(actual_t) - away_temp) > 0.01:
+                log(f"[DIFF]  '{zone_key}' away_temp: current={actual_t}, wanted={away_temp}", 1)
+                return True
+            if actual_p != preheat_level:
+                log(f"[DIFF]  '{zone_key}' preheat: current={actual_p}, wanted={preheat_level}", 1)
+                return True
+        # away_enabled=False → no frost, leave Tado frost protection untouched
 
     return False
 
@@ -820,27 +820,28 @@ def apply_zone_config(tado: Tado, zone_id: int, zone_key: str, zone_cfg: dict):
             tado_put(tado, f"zones/{zone_id}/schedule/timetables/{timetable_id}/blocks/{day_type}",
                      day_blocks)
 
-    if "early_start" in zone_cfg:
+    if "early_start" in zone_cfg and "timetable" in zone_cfg:
         tado_put(tado, f"zones/{zone_id}/earlyStart", {"enabled": zone_cfg["early_start"]})
         log(f"[OK]   '{zone_key}' early_start: {zone_cfg['early_start']}", 1)
 
     if any(k in zone_cfg for k in ("away_temp", "away_enabled", "preheat")):
-        preheat_map = {
-            "off": "OFF", "eco": "ECO",
-            "équilibre": "BALANCE", "balance": "BALANCE",
-            "confort": "COMFORT",   "comfort": "COMFORT",
-        }
-        preheat_level = preheat_map.get(zone_cfg.get("preheat", "eco").lower(), "ECO")
-        away_temp     = zone_cfg.get("away_temp", 15.0)
-        away_enabled  = zone_cfg.get("away_enabled", True)
-        if not away_enabled:
-            preheat_level = "OFF"
-        tado_put(tado, f"zones/{zone_id}/awayConfiguration", {
-            "type":                    "HEATING",
-            "preheatingLevel":         preheat_level,
-            "minimumAwayTemperature":  {"celsius": float(away_temp)},
-        })
-        log(f"[OK]   '{zone_key}' away: {away_temp}°C preheat={preheat_level}", 1)
+        away_enabled = zone_cfg.get("away_enabled", True)
+        if away_enabled:
+            preheat_map = {
+                "off": "OFF", "eco": "ECO",
+                "équilibre": "BALANCE", "balance": "BALANCE",
+                "confort": "COMFORT",   "comfort": "COMFORT",
+            }
+            preheat_level = preheat_map.get(zone_cfg.get("preheat", "eco").lower(), "ECO")
+            away_temp     = zone_cfg.get("away_temp", 15.0)
+            tado_put(tado, f"zones/{zone_id}/awayConfiguration", {
+                "type":                    "HEATING",
+                "preheatingLevel":         preheat_level,
+                "minimumAwayTemperature":  {"celsius": float(away_temp)},
+            })
+            log(f"[OK]   '{zone_key}' away: {away_temp}°C preheat={preheat_level}", 1)
+        else:
+            log(f"[OK]   '{zone_key}' away: no frost — Tado frost protection left untouched", 1)
 
 
 def merge_zone_configs(cfg_l1: dict, cfg_l2: dict | None) -> dict:
