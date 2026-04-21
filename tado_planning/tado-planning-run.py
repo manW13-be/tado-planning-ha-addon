@@ -937,6 +937,59 @@ def print_config_summary(config_name: str, zone_cfg_map: dict, level: int):
 # MAIN
 # ---------------------------------------------------------------------------
 
+def cmd_tado_zones():
+    """Read current zone configurations from Tado and print as JSON."""
+    _TT_ID_TO_NAME   = {0: "Mon-Sun", 1: "Mon-Fri, Sat, Sun", 2: "Mon, ..., Sun"}
+    _TT_KEYS         = {
+        "Mon-Sun":           ["Mon-Sun"],
+        "Mon-Fri, Sat, Sun": ["Mon-Fri", "Sat", "Sun"],
+        "Mon, ..., Sun":     ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+    }
+    _PREHEAT_REVERSE = {"OFF": "off", "ECO": "ECO", "BALANCE": "BALANCE", "COMFORT": "COMFORT"}
+
+    tado      = get_tado_client()
+    all_zones = tado.get_zones()
+    result    = {}
+    errors    = []
+
+    for zone in all_zones:
+        zid   = zone["id"]
+        zname = zone["name"].lower().replace(" ", "_").replace(".", "").replace("-", "_")
+        try:
+            zcfg = {}
+            active_tt = tado_get(tado, f"zones/{zid}/schedule/activeTimetable")
+            tt_id     = active_tt.get("id") if isinstance(active_tt, dict) else None
+            tt_name   = _TT_ID_TO_NAME.get(tt_id)
+            if tt_name:
+                zcfg["timetable"] = tt_name
+                for day_key in _TT_KEYS[tt_name]:
+                    api_day = DAY_KEY_TO_API[day_key]
+                    raw     = tado_get(tado, f"zones/{zid}/schedule/timetables/{tt_id}/blocks/{api_day}")
+                    blocks  = raw if isinstance(raw, list) else raw.get("blocks", [])
+                    zcfg[day_key] = [
+                        {"start": b["start"],
+                         "temp":  b.get("setting", {}).get("temperature", {}).get("celsius")}
+                        for b in blocks if b.get("setting", {}).get("power") == "ON"
+                    ]
+                es = tado_get(tado, f"zones/{zid}/earlyStart")
+                zcfg["early_start"] = es.get("enabled", False) if isinstance(es, dict) else False
+            away = tado_get(tado, f"zones/{zid}/awayConfiguration")
+            if isinstance(away, dict):
+                pl  = away.get("preheatingLevel", "ECO")
+                mat = away.get("minimumAwayTemperature")
+                zcfg["preheat"]      = _PREHEAT_REVERSE.get(pl, (pl or "ECO").lower())
+                zcfg["away_temp"]    = mat.get("celsius") if isinstance(mat, dict) else None
+                zcfg["away_enabled"] = pl != "OFF"
+            result[zname] = zcfg
+        except Exception as e:
+            errors.append(f"{zname}: {e}")
+
+    out = {"zones": result}
+    if errors:
+        out["errors"] = errors
+    print(json.dumps(out))
+
+
 def main():
     global VERBOSITY
 
@@ -946,6 +999,8 @@ def main():
     )
     parser.add_argument("-d", "--date", metavar="YYYY-MM-DD",
                         help="Simulate a specific date")
+    parser.add_argument("--tado-zones", action="store_true",
+                        help="Read current zone configs from Tado and output as JSON")
     parser.add_argument("-v", "--verbose", action="count", default=0,
                         help=("-v    : config zone details\n"
                               "-vv   : + cycle candidates\n"
@@ -953,6 +1008,10 @@ def main():
                               "-vvvv : + raw PUT/GET"))
     args = parser.parse_args()
     VERBOSITY = min(args.verbose, 4)
+
+    if args.tado_zones:
+        cmd_tado_zones()
+        return
 
     if args.date:
         try:
