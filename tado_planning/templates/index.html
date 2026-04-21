@@ -1548,20 +1548,16 @@ function dtpNormalizeTime(raw) {
   return "00:00";
 }
 function dtpTimeInput(id, el) {
-  // live update state only if date is already set
   const field = id === 'pl-start' ? 'start' : 'end';
-  const { date } = dtpParse(state.plData[field]);
-  if (date) {
-    // don't normalize yet — wait for blur so user can type freely
-    state.plData[field] = dtpCompose(date, el.value);
-  }
+  const m = (state.plData[field] || '').match(/^(\d{4}-\d{2}-\d{2})/);
+  if (m) state.plData[field] = dtpCompose(m[1], el.value);
 }
 function dtpTimeBlur(id, el) {
   const normalized = dtpNormalizeTime(el.value);
   el.value = normalized;
   const field = id === 'pl-start' ? 'start' : 'end';
-  const { date } = dtpParse(state.plData[field]);
-  if (date) state.plData[field] = dtpCompose(date, normalized);
+  const m = (state.plData[field] || '').match(/^(\d{4}-\d{2}-\d{2})/);
+  if (m) state.plData[field] = dtpCompose(m[1], normalized);
 }
 // Close calendars when clicking outside
 document.addEventListener('click', e => {
