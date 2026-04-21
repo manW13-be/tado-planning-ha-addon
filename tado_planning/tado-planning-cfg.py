@@ -27,103 +27,6 @@ import time
 
 from flask import Flask, jsonify, request, render_template
 
-try:
-    from tado        import Tado
-    from tado.models import TadoRequest, Action, Mode, Domain, DeviceActivationStatus
-    _TADO_AVAILABLE = True
-except ImportError:
-    _TADO_AVAILABLE = False
-
-# ---------------------------------------------------------------------------
-# TADO READ HELPERS
-# ---------------------------------------------------------------------------
-
-_TT_ID_TO_NAME = {0: "Mon-Sun", 1: "Mon-Fri, Sat, Sun", 2: "Mon, ..., Sun"}
-_TT_REQUIRED_KEYS = {
-    "Mon-Sun":           ["Mon-Sun"],
-    "Mon-Fri, Sat, Sun": ["Mon-Fri", "Sat", "Sun"],
-    "Mon, ..., Sun":     ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
-}
-_DAY_KEY_TO_API = {
-    "Mon-Sun": "MONDAY_TO_SUNDAY",
-    "Mon-Fri": "MONDAY_TO_FRIDAY",
-    "Sat": "SATURDAY",  "Sun": "SUNDAY",
-    "Mon": "MONDAY",    "Tue": "TUESDAY",   "Wed": "WEDNESDAY",
-    "Thu": "THURSDAY",  "Fri": "FRIDAY",
-}
-_PREHEAT_REVERSE = {"OFF": "off", "ECO": "ECO", "BALANCE": "BALANCE", "COMFORT": "COMFORT"}
-
-
-def _get_tado_client_ro():
-    """Create a read-only Tado client using the existing saved token. Raises on failure."""
-    if not _TADO_AVAILABLE:
-        raise RuntimeError("python-tado library not installed")
-    if not os.path.exists(TOKEN_FILE):
-        raise RuntimeError("No Tado token found — run the scheduler once to authenticate")
-    tado   = Tado(token_file_path=TOKEN_FILE)
-    status = tado.device_activation_status()
-    if status.value == "PENDING":
-        raise RuntimeError("Tado authentication required — open the scheduler to authenticate")
-    if status.value == "NOT_STARTED":
-        tado._http._device_activation_status = DeviceActivationStatus.COMPLETED
-        req         = TadoRequest()
-        req.command = "me"
-        req.action  = Action.GET
-        req.domain  = Domain.ME
-        req.mode    = Mode.OBJECT
-        me = tado._http.request(req)
-        if "homes" not in me:
-            raise RuntimeError("Unexpected Tado API response")
-        tado._http._id    = me["homes"][0]["id"]
-        tado._http._x_api = False
-    return tado
-
-
-def _tado_get(tado, command):
-    req = TadoRequest(command=command, action=Action.GET, mode=Mode.OBJECT)
-    return tado._http.request(req)
-
-
-def _read_tado_zones():
-    """Connect to Tado and return all zones in weekconfig-style dict."""
-    tado = _get_tado_client_ro()
-    all_zones = tado.get_zones()
-    result = {}
-    errors = []
-    for zone in all_zones:
-        zid   = zone["id"]
-        zname = zone["name"].lower().replace(" ", "_").replace(".", "").replace("-", "_")
-        try:
-            zcfg = {}
-            # Active timetable
-            active_tt = _tado_get(tado, f"zones/{zid}/schedule/activeTimetable")
-            tt_id     = active_tt.get("id") if isinstance(active_tt, dict) else None
-            tt_name   = _TT_ID_TO_NAME.get(tt_id)
-            if tt_name:
-                zcfg["timetable"] = tt_name
-                for day_key in _TT_REQUIRED_KEYS[tt_name]:
-                    api_day   = _DAY_KEY_TO_API[day_key]
-                    raw       = _tado_get(tado, f"zones/{zid}/schedule/timetables/{tt_id}/blocks/{api_day}")
-                    blocks    = raw if isinstance(raw, list) else raw.get("blocks", [])
-                    zcfg[day_key] = [
-                        {"start": b["start"],
-                         "temp":  b.get("setting", {}).get("temperature", {}).get("celsius")}
-                        for b in blocks if b.get("setting", {}).get("power") == "ON"
-                    ]
-                es = _tado_get(tado, f"zones/{zid}/earlyStart")
-                zcfg["early_start"] = es.get("enabled", False) if isinstance(es, dict) else False
-            # Away configuration
-            away = _tado_get(tado, f"zones/{zid}/awayConfiguration")
-            if isinstance(away, dict):
-                pl  = away.get("preheatingLevel", "ECO")
-                mat = away.get("minimumAwayTemperature")
-                zcfg["preheat"]      = _PREHEAT_REVERSE.get(pl, (pl or "ECO").lower())
-                zcfg["away_temp"]    = mat.get("celsius") if isinstance(mat, dict) else None
-                zcfg["away_enabled"] = pl != "OFF"
-            result[zname] = zcfg
-        except Exception as e:
-            errors.append(f"{zname}: {e}")
-    return result, errors
 
 # ---------------------------------------------------------------------------
 # PATHS
@@ -1157,11 +1060,16 @@ def api_service_uninstall():
 @app.route("/api/tado/zones")
 def api_tado_zones():
     try:
-        zones, errors = _read_tado_zones()
-        resp = {"zones": zones}
-        if errors:
-            resp["errors"] = errors
-        return jsonify(resp)
+        result = subprocess.run(
+            [sys.executable, PLANNING_SCRIPT, "--tado-zones"],
+            capture_output=True, text=True, timeout=40,
+        )
+        if result.returncode != 0:
+            err = result.stderr.strip() or result.stdout.strip() or "Script failed"
+            return jsonify({"error": err}), 500
+        return jsonify(json.loads(result.stdout))
+    except subprocess.TimeoutExpired:
+        return jsonify({"error": "Tado read timed out"}), 504
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
