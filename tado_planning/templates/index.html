@@ -1246,6 +1246,13 @@ async function loadPlannings() {
   try {
     const { data } = await api("GET", "/plannings");
     state.pl = data.plannings || [];
+    if (state.plCurrent && !state.plIsNew) {
+      const fresh = state.pl.find(p => p.name === state.plCurrent);
+      if (fresh) {
+        state.plData = JSON.parse(JSON.stringify(fresh));
+        delete _dtpState['pl-start']; delete _dtpState['pl-end'];
+      }
+    }
     renderPlList();
     if (state.plCurrent || state.plIsNew) renderPlDetail();
   } catch(e) { toast(e.message, "err"); }
@@ -1284,6 +1291,7 @@ function plNew() {
   state.plCurrent = null;
   state.plIsNew   = true;
   state.plData    = { name: '', start: null, end: null, cycle: 'two-weeks-iso', events: [] };
+  delete _dtpState['pl-start']; delete _dtpState['pl-end'];
   renderPlList();
   renderPlDetail();
 }
@@ -1295,6 +1303,7 @@ function plCopyFrom() {
   state.plIsNew   = true;
   state.plData    = JSON.parse(JSON.stringify(src));
   state.plData.name = '';
+  delete _dtpState['pl-start']; delete _dtpState['pl-end'];
   renderPlList();
   renderPlDetail();
   toast(`Copied from '${src.name}' — edit name and save`, '');
@@ -1304,6 +1313,7 @@ function selectPl(name) {
   state.plCurrent = name;
   state.plIsNew   = false;
   state.plData    = JSON.parse(JSON.stringify(state.pl.find(p => p.name === name)));
+  delete _dtpState['pl-start']; delete _dtpState['pl-end'];
   renderPlList();
   renderPlDetail();
 }
