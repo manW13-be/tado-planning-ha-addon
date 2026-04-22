@@ -996,6 +996,76 @@ def cmd_tado_zones():
     print(json.dumps(out))
 
 
+def cmd_simulate(date_str: str | None = None):
+    """Compute merged zone configs without connecting to Tado. Outputs JSON on stdout."""
+    import sys as _sys
+    import copy as _copy
+    _stdout, _sys.stdout = _sys.stdout, _sys.stderr
+
+    if date_str:
+        try:
+            now = datetime.datetime.strptime(date_str, "%Y-%m-%d")
+        except ValueError:
+            _sys.stdout = _stdout
+            print(json.dumps({"error": f"Invalid date '{date_str}'"}))
+            return
+    else:
+        now = datetime.datetime.now()
+
+    plannings, weekconfigs = load_data_files()
+    if not validate_all(plannings, weekconfigs):
+        _sys.stdout = _stdout
+        print(json.dumps({"error": "Validation failed — check server logs"}))
+        return
+
+    active_pls = active_plannings_at(plannings, now)
+    all_zones  = sorted({z for cfg in weekconfigs.values() for z in cfg.keys()})
+
+    to_apply = {1: {}, 2: {}}
+    for zone in all_zones:
+        for level in (1, 2):
+            cfg, pl_name = resolve_config_for_zone(zone, level, active_pls, now, weekconfigs)
+            if cfg:
+                to_apply[level].setdefault(cfg, []).append(zone)
+
+    zone_merged_map  = {}
+    zone_l1_cfg_name = {}
+    zone_l2_cfg_name = {}
+
+    for zone in all_zones:
+        l1_cfg_name = next(
+            (cfg for cfg, zs in to_apply[1].items() if zone in zs), None
+        )
+        if l1_cfg_name is None:
+            continue
+        zone_l1_cfg_name[zone] = l1_cfg_name
+        cfg_l1 = weekconfigs[l1_cfg_name][zone]
+
+        l2_cfg_name = next(
+            (cfg for cfg, zs in to_apply[2].items() if zone in zs), None
+        )
+        cfg_l2 = weekconfigs[l2_cfg_name][zone] if l2_cfg_name else None
+        if l2_cfg_name:
+            zone_l2_cfg_name[zone] = l2_cfg_name
+
+        zone_merged_map[zone] = merge_zone_configs(cfg_l1, cfg_l2)
+
+    iso_week = now.isocalendar()[1]
+    out = {
+        "zones": zone_merged_map,
+        "meta": {
+            "date":     now.strftime("%Y-%m-%d"),
+            "weekday":  DAY_NAMES_EN[now.weekday()],
+            "iso_week": iso_week,
+            "plannings": [p["name"] for p in active_pls],
+            "l1_map":   zone_l1_cfg_name,
+            "l2_map":   zone_l2_cfg_name,
+        },
+    }
+    _sys.stdout = _stdout
+    print(json.dumps(out))
+
+
 def main():
     global VERBOSITY
 
@@ -1004,9 +1074,11 @@ def main():
         formatter_class=argparse.RawTextHelpFormatter,
     )
     parser.add_argument("-d", "--date", metavar="YYYY-MM-DD",
-                        help="Simulate a specific date")
+                        help="Simulate a specific date (also applies to --simulate)")
     parser.add_argument("--tado-zones", action="store_true",
                         help="Read current zone configs from Tado and output as JSON")
+    parser.add_argument("--simulate", action="store_true",
+                        help="Compute expected zone configs without connecting to Tado; output JSON")
     parser.add_argument("-v", "--verbose", action="count", default=0,
                         help=("-v    : config zone details\n"
                               "-vv   : + cycle candidates\n"
@@ -1017,6 +1089,10 @@ def main():
 
     if args.tado_zones:
         cmd_tado_zones()
+        return
+
+    if args.simulate:
+        cmd_simulate(args.date)
         return
 
     if args.date:
