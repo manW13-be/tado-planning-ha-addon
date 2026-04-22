@@ -849,8 +849,8 @@ def merge_zone_configs(cfg_l1: dict, cfg_l2: dict | None) -> dict:
     """
     Merge level-1 and level-2 zone configs into a single virtual config.
     If cfg_l2 has a timetable: full override (all L2 keys replace L1).
-    If cfg_l2 is away-only (no timetable): only merge away fields
-    (away_temp, away_enabled, preheat) — never touch early_start or schedule keys.
+    If cfg_l2 is away-only (no timetable): only merge away_temp and away_enabled
+    — preheat, early_start, and schedule keys are preserved from L1.
     If cfg_l2 is None, returns a copy of cfg_l1 unchanged.
     """
     import copy
