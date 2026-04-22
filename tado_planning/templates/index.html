@@ -2276,9 +2276,14 @@ async function loadAddon() {
     html += card('Actions', `
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:4px">
         <button class="btn btn-primary" onclick="addonRunNow(this)">▶ Run now</button>
+        <button class="btn btn-secondary" onclick="addonCheckUpdate(this)" id="btn-check-update">🔍 Check for updates</button>
         ${data.update_available
-          ? `<button class="btn btn-secondary" onclick="addonUpdate(this)">⬆ Update to ${data.version_latest}</button>`
-          : `<button class="btn btn-secondary" disabled title="No update available">⬆ Update</button>`}
+          ? `<button class="btn btn-secondary" onclick="addonUpdate(this)" id="btn-do-update">⬆ Update to ${data.version_latest}</button>`
+          : `<button class="btn btn-secondary" disabled id="btn-do-update" title="No update available">⬆ Update</button>`}
+      </div>
+      <div style="margin-top:10px;font-size:11px;color:var(--muted)">
+        Le Supervisor vérifie les mises à jour automatiquement toutes les ~24h.
+        "Check for updates" force un rechargement immédiat du dépôt.
       </div>
     `);
 
@@ -2296,6 +2301,23 @@ async function addonRunNow(btn) {
     else { toast("Run triggered", "ok"); setTimeout(loadAddon, 2000); }
   } catch(e) { toast(e.message, "err"); }
   finally { btn.disabled = false; btn.textContent = '▶ Run now'; }
+}
+
+async function addonCheckUpdate(btn) {
+  btn.disabled = true; btn.textContent = '⏳ Checking…';
+  try {
+    const { data } = await api("POST", "/addon/check-update");
+    if (data.error) { toast(data.error, "err"); return; }
+    const upBtn = document.getElementById("btn-do-update");
+    if (data.update_available) {
+      toast(`Update available: ${data.version_latest}`, "ok");
+      if (upBtn) { upBtn.disabled = false; upBtn.textContent = `⬆ Update to ${data.version_latest}`; upBtn.onclick = () => addonUpdate(upBtn); }
+    } else {
+      toast(`Already up to date (${data.version})`, "ok");
+      if (upBtn) { upBtn.disabled = true; upBtn.textContent = '⬆ Update'; }
+    }
+  } catch(e) { toast(e.message, "err"); }
+  finally { btn.disabled = false; btn.textContent = '🔍 Check for updates'; }
 }
 
 async function addonUpdate(btn) {
