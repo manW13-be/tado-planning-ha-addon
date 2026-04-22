@@ -1,6 +1,6 @@
 {
   "name": "Tado Planning",
-  "version": "1.2.24",
+  "version": "1.2.25",
   "slug": "tado_planning",
   "description": "Tado heating schedule manager with web configurator. Access UI at http://ha2.local:8099",
   "arch": [
