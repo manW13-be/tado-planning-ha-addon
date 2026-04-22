@@ -793,6 +793,7 @@ def zone_needs_update(tado: Tado, zone_id: int, zone_cfg: dict, zone_key: str,
         result   = tado_get(tado, f"zones/{zone_id}/awayConfiguration")
         actual_t = result.get("minimumAwayTemperature", {}).get("celsius") if isinstance(result, dict) else None
         actual_p = result.get("preheatingLevel") if isinstance(result, dict) else None
+        log(f"[CHECK] '{zone_key}' away: cfg_preheat={zone_cfg.get('preheat','(missing)')}→{preheat_level} tado={actual_p} | cfg_temp={zone_cfg.get('away_temp','(missing)')}→{away_temp} tado={actual_t}", 1)
         if actual_t is None or abs(float(actual_t) - away_temp) > 0.01:
             log(f"[DIFF]  '{zone_key}' away_temp: current={actual_t}, wanted={away_temp}", log_level)
             return True
