@@ -21,7 +21,6 @@ import platform
 import datetime
 import subprocess
 import threading
-import threading
 import webbrowser
 import time
 
@@ -1093,6 +1092,67 @@ def api_tado_zones():
 
 
 # ---------------------------------------------------------------------------
+# HA ENTITY MONITOR (background thread)
+# ---------------------------------------------------------------------------
+
+_HA_BASE  = "http://supervisor/core/api"
+_SUP_BASE = "http://supervisor"
+
+def _ha_headers():
+    token = os.environ.get("SUPERVISOR_TOKEN", "")
+    return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
+
+def _ha_monitor():
+    """Poll HA input_boolean triggers every 30 s and act when turned on."""
+    import requests as _req
+
+    token = os.environ.get("SUPERVISOR_TOKEN")
+    if not token:
+        return  # not running inside HA
+
+    hdrs = _ha_headers()
+
+    # Register initial states so entities appear in HA dashboard
+    for eid, fname, icon in [
+        ("input_boolean.tado_planning_run_now",   "Tado Planning — run now",    "mdi:play-circle"),
+        ("input_boolean.tado_planning_do_update", "Tado Planning — do update",  "mdi:update"),
+    ]:
+        try:
+            _req.post(f"{_HA_BASE}/states/{eid}", headers=hdrs, timeout=5,
+                      json={"state": "off",
+                            "attributes": {"friendly_name": fname, "icon": icon}})
+        except Exception:
+            pass
+
+    while True:
+        try:
+            r = _req.get(f"{_HA_BASE}/states/input_boolean.tado_planning_run_now",
+                         headers=hdrs, timeout=5)
+            if r.ok and r.json().get("state") == "on":
+                subprocess.Popen(
+                    [sys.executable, PLANNING_SCRIPT],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                )
+                _req.post(f"{_HA_BASE}/services/input_boolean/turn_off", headers=hdrs,
+                          timeout=5, json={"entity_id": "input_boolean.tado_planning_run_now"})
+        except Exception:
+            pass
+
+        try:
+            r = _req.get(f"{_HA_BASE}/states/input_boolean.tado_planning_do_update",
+                         headers=hdrs, timeout=5)
+            if r.ok and r.json().get("state") == "on":
+                _req.post(f"{_SUP_BASE}/addons/self/update", headers=hdrs, timeout=60)
+                _req.post(f"{_HA_BASE}/services/input_boolean/turn_off", headers=hdrs,
+                          timeout=5, json={"entity_id": "input_boolean.tado_planning_do_update"})
+        except Exception:
+            pass
+
+        time.sleep(30)
+
+
+# ---------------------------------------------------------------------------
 # MAIN
 # ---------------------------------------------------------------------------
 
@@ -1110,6 +1170,8 @@ def main():
     print(f"  Data dir : {DATA_DIR}")
     print(f"  Token    : {TOKEN_FILE}")
     print(f"\n  Press Ctrl+C to stop.\n")
+
+    threading.Thread(target=_ha_monitor, daemon=True).start()
 
     if not args.no_browser and platform.system() == "Darwin":
         def open_browser():
