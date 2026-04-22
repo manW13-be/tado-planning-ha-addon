@@ -1108,6 +1108,29 @@ def api_addon_info():
     return jsonify(out)
 
 
+@app.route("/api/addon/check-update", methods=["POST"])
+def api_addon_check_update():
+    """Force Supervisor to reload the addon store, then return fresh addon info."""
+    token = os.environ.get("SUPERVISOR_TOKEN")
+    if not token:
+        return jsonify({"error": "Not running inside HA"}), 400
+    try:
+        import requests as _req
+        hdrs = _ha_headers()
+        _req.post(f"{_SUP_BASE}/store/reload", headers=hdrs, timeout=15)
+        r = _req.get(f"{_SUP_BASE}/addons/self/info", headers=hdrs, timeout=5)
+        if not r.ok:
+            return jsonify({"error": r.text}), 500
+        d = r.json().get("data", {})
+        return jsonify({
+            "version":          d.get("version"),
+            "version_latest":   d.get("version_latest"),
+            "update_available": d.get("update_available", False),
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/addon/update", methods=["POST"])
 def api_addon_update():
     token = os.environ.get("SUPERVISOR_TOKEN")
