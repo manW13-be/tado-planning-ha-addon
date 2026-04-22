@@ -1951,10 +1951,13 @@ async function loadLogs() {
       else if (/\[TADO\]/.test(line))        color = "color:#60a5fa";
       else if (/\[APPLY\]/.test(line))       color = "color:#f59e0b";
       else if (/\[VERIFY\]/.test(line))      color = "color:#f59e0b";
+      else if (/\[API\]/.test(line))         color = "color:#94a3b8";
       const escaped = line.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
       return color ? `<span style="${color}">${escaped}</span>` : escaped;
     }).join("\n");
-    meta.textContent = `${data.total} total lines · showing last ${data.lines.length}`;
+    const lastApi = data.lines.filter(l => /\[API\] \d+ calls/.test(l)).pop();
+    const apiInfo = lastApi ? ' · ' + lastApi.replace(/.*\[API\] /, '') : '';
+    meta.textContent = `${data.total} total lines · showing last ${data.lines.length}${apiInfo}`;
     // Auto-scroll to bottom
     if (document.getElementById("log-autoscroll")?.checked) {
       out.scrollTop = out.scrollHeight;

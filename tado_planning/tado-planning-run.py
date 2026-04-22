@@ -614,7 +614,11 @@ def select_config_for_level(events: list, level: int, now: datetime.datetime,
 # TADO API HELPERS
 # ---------------------------------------------------------------------------
 
+_api_stats: dict[str, int] = {"GET": 0, "PUT": 0}
+
+
 def tado_put(tado: Tado, command: str, payload):
+    _api_stats["PUT"] += 1
     log(f"[API]  PUT {command}", 4)
     log(f"       payload : {json.dumps(payload, ensure_ascii=False)}", 4)
     req    = TadoRequest(command=command, action=Action.CHANGE, payload=payload, mode=Mode.OBJECT)
@@ -624,11 +628,17 @@ def tado_put(tado: Tado, command: str, payload):
 
 
 def tado_get(tado: Tado, command: str):
+    _api_stats["GET"] += 1
     log(f"[API]  GET {command}", 4)
     req    = TadoRequest(command=command, action=Action.GET, mode=Mode.OBJECT)
     result = tado._http.request(req)
     log(f"       response : {result}", 4)
     return result
+
+
+def log_api_stats():
+    total = _api_stats["GET"] + _api_stats["PUT"]
+    log(f"[API] {total} calls ({_api_stats['GET']} GET, {_api_stats['PUT']} PUT)")
 
 
 # ---------------------------------------------------------------------------
@@ -834,12 +844,13 @@ def apply_zone_config(tado: Tado, zone_id: int, zone_key: str, zone_cfg: dict):
         preheat_level = preheat_map.get(zone_cfg.get("preheat", "eco").lower(), "ECO")
         if zone_cfg.get("away_enabled") is False:
             preheat_level = "OFF"
-        away_temp     = zone_cfg.get("away_temp", 15.0)
-        tado_put(tado, f"zones/{zone_id}/awayConfiguration", {
-            "type":                    "HEATING",
-            "preheatingLevel":         preheat_level,
-            "minimumAwayTemperature":  {"celsius": float(away_temp)},
-        })
+        away_temp = zone_cfg.get("away_temp", 15.0)
+        # Read existing config first to preserve fields Tado requires (comfortLevel, autoAdjust…)
+        existing = tado_get(tado, f"zones/{zone_id}/awayConfiguration")
+        payload  = dict(existing) if isinstance(existing, dict) else {"type": "HEATING"}
+        payload["preheatingLevel"]        = preheat_level
+        payload["minimumAwayTemperature"] = {"celsius": float(away_temp)}
+        tado_put(tado, f"zones/{zone_id}/awayConfiguration", payload)
         log(f"[OK]   '{zone_key}' away: {away_temp}°C preheat={preheat_level}", 1)
 
 
@@ -911,6 +922,7 @@ def apply_merged(tado: Tado,
             all_ok = False
     if all_ok:
         log("[✓] Verification OK — all zones compliant.")
+    log_api_stats()
 
 
 # ---------------------------------------------------------------------------
@@ -996,6 +1008,7 @@ def cmd_tado_zones():
     out = {"zones": result}
     if errors:
         out["errors"] = errors
+    log_api_stats()
     _sys.stdout = _stdout          # restore stdout before printing JSON
     print(json.dumps(out))
 
