@@ -1074,6 +1074,55 @@ def api_simulate():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/addon")
+def api_addon_info():
+    token = os.environ.get("SUPERVISOR_TOKEN")
+    out = {"ha_available": bool(token)}
+    if not token:
+        return jsonify(out)
+    try:
+        import requests as _req
+        hdrs = _ha_headers()
+
+        r = _req.get(f"{_SUP_BASE}/addons/self/info", headers=hdrs, timeout=5)
+        if r.ok:
+            d = r.json().get("data", {})
+            out["version"]          = d.get("version")
+            out["version_latest"]   = d.get("version_latest")
+            out["update_available"] = d.get("update_available", False)
+
+        for key, eid in [
+            ("last_run", "sensor.tado_planning_last_run"),
+            ("last_put", "sensor.tado_planning_last_put"),
+            ("api_get",  "sensor.tado_planning_api_get_calls"),
+            ("api_put",  "sensor.tado_planning_api_put_calls"),
+        ]:
+            try:
+                rs = _req.get(f"{_HA_BASE}/states/{eid}", headers=hdrs, timeout=5)
+                if rs.ok:
+                    out[key] = rs.json().get("state")
+            except Exception:
+                pass
+    except Exception as e:
+        out["error"] = str(e)
+    return jsonify(out)
+
+
+@app.route("/api/addon/update", methods=["POST"])
+def api_addon_update():
+    token = os.environ.get("SUPERVISOR_TOKEN")
+    if not token:
+        return jsonify({"error": "Not running inside HA"}), 400
+    try:
+        import requests as _req
+        r = _req.post(f"{_SUP_BASE}/addons/self/update", headers=_ha_headers(), timeout=60)
+        if r.ok:
+            return jsonify({"ok": True})
+        return jsonify({"error": r.text}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/tado/zones")
 def api_tado_zones():
     try:
