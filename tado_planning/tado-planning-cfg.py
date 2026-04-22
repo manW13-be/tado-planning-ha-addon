@@ -1057,6 +1057,24 @@ def api_service_uninstall():
 # TADO STATE ENDPOINT
 # ---------------------------------------------------------------------------
 
+@app.route("/api/simulate")
+def api_simulate():
+    try:
+        date_str = request.args.get("date")
+        cmd = [sys.executable, PLANNING_SCRIPT, "--simulate"]
+        if date_str:
+            cmd += ["-d", date_str]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+        if result.returncode != 0:
+            err = result.stderr.strip() or result.stdout.strip() or "Script failed"
+            return jsonify({"error": err}), 500
+        return jsonify(json.loads(result.stdout))
+    except subprocess.TimeoutExpired:
+        return jsonify({"error": "Simulation timed out"}), 504
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/tado/zones")
 def api_tado_zones():
     try:
