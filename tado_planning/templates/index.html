@@ -172,6 +172,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text);
 .af-err { color:#dc2626; }
 .af-exp { color:#15803d; background:#f0fdf4; padding:1px 5px; border-radius:3px; font-family:var(--mono); font-size:12px; }
 .af-act { color:#b91c1c; background:#fef2f2; padding:1px 5px; border-radius:3px; font-family:var(--mono); font-size:12px; }
+.af-prov { color:var(--muted); font-size:11px; margin-left:5px; }
 .zone-card { border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
 .zone-card-header { display: flex; align-items: center; justify-content: space-between;
                     padding: 8px 12px; background: var(--bg); cursor: pointer; }
@@ -2069,9 +2070,10 @@ async function loadAnalysis() {
     if (tadoRes.data.error) { el.innerHTML = `<div class="alert alert-error">Tado: ${tadoRes.data.error}</div>`; return; }
     if (simRes.data.error)  { el.innerHTML = `<div class="alert alert-error">Simulate: ${simRes.data.error}</div>`; return; }
 
-    const actual   = tadoRes.data.zones || {};
-    const expected = simRes.data.zones  || {};
-    const meta     = simRes.data.meta   || {};
+    const actual     = tadoRes.data.zones      || {};
+    const expected   = simRes.data.zones       || {};
+    const provenance = simRes.data.provenance  || {};
+    const meta       = simRes.data.meta        || {};
 
     const allZones = [...new Set([...Object.keys(expected), ...Object.keys(actual)])];
     if (!allZones.length) {
@@ -2089,7 +2091,7 @@ async function loadAnalysis() {
     }
 
     let html = metaHtml + '<div class="zone-list">';
-    for (const zname of allZones) html += _analysisZoneCard(zname, expected[zname], actual[zname]);
+    for (const zname of allZones) html += _analysisZoneCard(zname, expected[zname], actual[zname], provenance[zname] || {});
     html += '</div>';
     el.innerHTML = html;
   } catch(e) {
@@ -2097,7 +2099,7 @@ async function loadAnalysis() {
   }
 }
 
-function _analysisZoneCard(zname, exp, act) {
+function _analysisZoneCard(zname, exp, act, prov) {
   if (!exp) return `<div class="zone-card"><div class="zone-card-header"><span class="zone-card-title">${zname}</span><span style="font-size:12px;color:var(--red)">Not in simulation</span></div></div>`;
   if (!act) return `<div class="zone-card"><div class="zone-card-header"><span class="zone-card-title">${zname}</span><span style="font-size:12px;color:var(--red)">Not found in Tado</span></div></div>`;
 
@@ -2106,19 +2108,24 @@ function _analysisZoneCard(zname, exp, act) {
     const m = {off:'OFF',eco:'ECO',équilibre:'BALANCE',balance:'BALANCE',confort:'COMFORT',comfort:'COMFORT'};
     return m[v.toLowerCase()] || v.toUpperCase();
   };
+  const provTag = key => {
+    const p = prov[key];
+    if (!p) return '';
+    return `<span class="af-prov">[L${p.level}: ${p.config}]</span>`;
+  };
 
   const rows = [];
-  const okRow   = (label, val) =>
-    rows.push(`<tr><td class="af-label">${label}</td><td class="af-icon af-ok">✓</td><td class="af-val">${val}</td></tr>`);
-  const diffRow = (label, eVal, aVal) =>
-    rows.push(`<tr><td class="af-label">${label}</td><td class="af-icon af-err">✗</td><td class="af-val"><span class="af-exp">expected: ${eVal}</span>&nbsp;<span class="af-act">actual: ${aVal}</span></td></tr>`);
+  const okRow   = (label, val, key) =>
+    rows.push(`<tr><td class="af-label">${label}</td><td class="af-icon af-ok">✓</td><td class="af-val">${val}${provTag(key)}</td></tr>`);
+  const diffRow = (label, eVal, aVal, key) =>
+    rows.push(`<tr><td class="af-label">${label}</td><td class="af-icon af-err">✗</td><td class="af-val"><span class="af-exp">expected: ${eVal}</span>&nbsp;<span class="af-act">actual: ${aVal}</span>${provTag(key)}</td></tr>`);
 
   // timetable
   const eTT = exp.timetable || null;
   const aTT = act.timetable || null;
   if (eTT || aTT) {
-    if (eTT === aTT) okRow('Timetable', eTT || '—');
-    else diffRow('Timetable', eTT || '—', aTT || '—');
+    if (eTT === aTT) okRow('Timetable', eTT || '—', 'timetable');
+    else diffRow('Timetable', eTT || '—', aTT || '—', 'timetable');
   }
 
   // schedule slots per day
@@ -2130,10 +2137,10 @@ function _analysisZoneCard(zname, exp, act) {
     const aS = norm(act[k]);
     const match = eS.length===aS.length && eS.every((s,i)=>s.start===aS[i].start && Math.abs(s.temp-aS[i].temp)<0.05);
     if (match) {
-      okRow(k, `${eS.length} slot${eS.length!==1?'s':''}`);
+      okRow(k, `${eS.length} slot${eS.length!==1?'s':''}`, k);
     } else {
       const fmt = ss => ss.length ? ss.map(s=>`${s.start}→${s.temp}°C`).join(', ') : '(none)';
-      diffRow(k, fmt(eS), fmt(aS));
+      diffRow(k, fmt(eS), fmt(aS), k);
     }
   }
 
@@ -2141,32 +2148,32 @@ function _analysisZoneCard(zname, exp, act) {
   if ('early_start' in exp || 'early_start' in act) {
     const eE = exp.early_start ?? false;
     const aE = act.early_start ?? false;
-    if (eE === aE) okRow('Early start', eE ? 'enabled' : 'disabled');
-    else diffRow('Early start', eE ? 'enabled' : 'disabled', aE ? 'enabled' : 'disabled');
+    if (eE === aE) okRow('Early start', eE ? 'enabled' : 'disabled', 'early_start');
+    else diffRow('Early start', eE ? 'enabled' : 'disabled', aE ? 'enabled' : 'disabled', 'early_start');
   }
 
   // preheat — away_enabled:false forces OFF regardless of preheat field
   if ('preheat' in exp || 'preheat' in act) {
     const eP = (exp.away_enabled === false) ? 'OFF' : normPreheat(exp.preheat);
     const aP = normPreheat(act.preheat);
-    if (eP === aP) okRow('Preheat', eP);
-    else diffRow('Preheat', eP, aP);
+    if (eP === aP) okRow('Preheat', eP, 'preheat');
+    else diffRow('Preheat', eP, aP, 'preheat');
   }
 
   // away_temp
   if ('away_temp' in exp || 'away_temp' in act) {
     const eT = parseFloat(exp.away_temp);
     const aT = parseFloat(act.away_temp);
-    if (!isNaN(eT) && !isNaN(aT) && Math.abs(eT-aT) < 0.05) okRow('Away temp', `${eT}°C`);
-    else diffRow('Away temp', isNaN(eT)?'—':eT+'°C', isNaN(aT)?'—':aT+'°C');
+    if (!isNaN(eT) && !isNaN(aT) && Math.abs(eT-aT) < 0.05) okRow('Away temp', `${eT}°C`, 'away_temp');
+    else diffRow('Away temp', isNaN(eT)?'—':eT+'°C', isNaN(aT)?'—':aT+'°C', 'away_temp');
   }
 
   // away_enabled
   if ('away_enabled' in exp || 'away_enabled' in act) {
     const eA = exp.away_enabled ?? true;
     const aA = act.away_enabled ?? true;
-    if (eA === aA) okRow('Away mode', eA ? 'enabled' : 'disabled');
-    else diffRow('Away mode', eA ? 'enabled' : 'disabled', aA ? 'enabled' : 'disabled');
+    if (eA === aA) okRow('Away mode', eA ? 'enabled' : 'disabled', 'away_enabled');
+    else diffRow('Away mode', eA ? 'enabled' : 'disabled', aA ? 'enabled' : 'disabled', 'away_enabled');
   }
 
   const total   = rows.length;
