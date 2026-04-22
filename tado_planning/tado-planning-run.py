@@ -843,7 +843,7 @@ def apply_zone_config(tado: Tado, zone_id: int, zone_key: str, zone_cfg: dict):
         log(f"[OK]   '{zone_key}' away: {away_temp}°C preheat={preheat_level}", 1)
 
 
-_AWAY_KEYS = ("away_temp", "away_enabled", "preheat")
+_AWAY_KEYS = ("away_temp", "away_enabled")
 
 def merge_zone_configs(cfg_l1: dict, cfg_l2: dict | None) -> dict:
     """
