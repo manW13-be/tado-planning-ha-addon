@@ -653,44 +653,64 @@ def push_ha_sensors():
     except ImportError:
         return
 
-    base    = "http://supervisor/core/api/states"
-    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-    run_ts  = datetime.datetime.now().astimezone().isoformat()
-    total   = _api_stats["GET"] + _api_stats["PUT"]
+    ha_base  = "http://supervisor/core/api/states"
+    sup_base = "http://supervisor"
+    ha_hdr   = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    run_ts   = datetime.datetime.now().astimezone().isoformat()
+
+    # --- Supervisor: version + update info ---
+    try:
+        sup_r    = _req.get(f"{sup_base}/addons/self/info", headers=ha_hdr, timeout=5)
+        sup_data = sup_r.json().get("data", {}) if sup_r.ok else {}
+    except Exception:
+        sup_data = {}
+    current_v  = sup_data.get("version", "?")
+    latest_v   = sup_data.get("version_latest")
+    update_av  = sup_data.get("update_available", False)
 
     sensors = [
         ("sensor.tado_planning_last_run", {
             "state": run_ts,
-            "attributes": {
-                "friendly_name": "Tado Planning — dernier run",
-                "device_class":  "timestamp",
-                "icon":          "mdi:clock-check",
-            },
+            "attributes": {"friendly_name": "Tado Planning — dernier run",
+                           "device_class": "timestamp", "icon": "mdi:clock-check"},
         }),
-        ("sensor.tado_planning_api_calls", {
-            "state": str(total),
-            "attributes": {
-                "friendly_name":      "Tado Planning — appels API (dernier run)",
-                "get_calls":          _api_stats["GET"],
-                "put_calls":          _api_stats["PUT"],
-                "unit_of_measurement": "calls",
-                "icon":               "mdi:api",
-            },
+        ("sensor.tado_planning_api_get_calls", {
+            "state": str(_api_stats["GET"]),
+            "attributes": {"friendly_name": "Tado Planning — appels API GET",
+                           "unit_of_measurement": "calls", "icon": "mdi:download-network"},
+        }),
+        ("sensor.tado_planning_api_put_calls", {
+            "state": str(_api_stats["PUT"]),
+            "attributes": {"friendly_name": "Tado Planning — appels API PUT",
+                           "unit_of_measurement": "calls", "icon": "mdi:upload-network"},
+        }),
+        ("sensor.tado_planning_version", {
+            "state": current_v,
+            "attributes": {"friendly_name": "Tado Planning — version installée",
+                           "icon": "mdi:tag"},
+        }),
+        ("binary_sensor.tado_planning_update_available", {
+            "state": "on" if update_av else "off",
+            "attributes": {"friendly_name": "Tado Planning — update disponible",
+                           "device_class": "update"},
         }),
     ]
+    if latest_v:
+        sensors.append(("sensor.tado_planning_latest_version", {
+            "state": latest_v,
+            "attributes": {"friendly_name": "Tado Planning — version disponible",
+                           "icon": "mdi:tag-arrow-up"},
+        }))
     if _last_put_time:
         sensors.append(("sensor.tado_planning_last_put", {
             "state": _last_put_time[0],
-            "attributes": {
-                "friendly_name": "Tado Planning — dernier PUT",
-                "device_class":  "timestamp",
-                "icon":          "mdi:upload-network",
-            },
+            "attributes": {"friendly_name": "Tado Planning — dernier PUT",
+                           "device_class": "timestamp", "icon": "mdi:upload-network"},
         }))
 
     for entity_id, payload in sensors:
         try:
-            r = _req.post(f"{base}/{entity_id}", headers=headers,
+            r = _req.post(f"{ha_base}/{entity_id}", headers=ha_hdr,
                           json=payload, timeout=5)
             log(f"[HA] {entity_id} → HTTP {r.status_code}", 1)
         except Exception as e:
