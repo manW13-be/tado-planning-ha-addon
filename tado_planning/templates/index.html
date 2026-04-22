@@ -350,6 +350,15 @@ body { font-family: var(--font); background: var(--bg); color: var(--text);
     Settings
   </div>
   <div class="nav-section">System</div>
+  <div class="nav-item" data-section="addon" onclick="showSection('addon')">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+      <rect x="2" y="2" width="5" height="5" rx="1"/>
+      <rect x="9" y="2" width="5" height="5" rx="1"/>
+      <rect x="2" y="9" width="5" height="5" rx="1"/>
+      <path d="M9 11.5h5M11.5 9v5" stroke-linecap="round"/>
+    </svg>
+    Add-on
+  </div>
   <div class="nav-item" data-section="logs" onclick="showSection('logs')">
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
       <rect x="2" y="2" width="12" height="12" rx="1"/>
@@ -547,6 +556,17 @@ body { font-family: var(--font); background: var(--bg); color: var(--text);
     </div>
   </section>
 
+  <!-- ── ADD-ON ── -->
+  <section id="sec-addon" class="section">
+    <div class="section-header">
+      <h1>Add-on</h1>
+      <button class="btn btn-secondary btn-sm" onclick="loadAddon()">↻ Refresh</button>
+    </div>
+    <div class="section-body" id="addonBody" style="max-width:700px">
+      <div class="empty"><div class="empty-icon">⏳</div><div class="empty-text">Loading…</div></div>
+    </div>
+  </section>
+
   <!-- SERVICE (macOS only) -->
   <section id="sec-service" class="section">
     <div class="section-header">
@@ -706,6 +726,7 @@ function showSection(id) {
   if (id === "plannings")   loadPlannings();
   if (id === "settings")    loadSettings();
   if (id === "analysis")    loadAnalysis();
+  if (id === "addon")       loadAddon();
   if (id === "logs")        { loadLogs(); _startLogsAutoRefresh(); }
   if (id === "service")     loadServiceStatus();
   if (id !== "logs")        _stopLogsAutoRefresh();
@@ -2194,6 +2215,97 @@ function _analysisZoneCard(zname, exp, act, prov) {
       <table class="af-table"><tbody>${rows.join('')}</tbody></table>
     </div>
   </div>`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// ADD-ON TAB
+// ─────────────────────────────────────────────────────────────────────────
+async function loadAddon() {
+  const el = document.getElementById("addonBody");
+  el.innerHTML = `<div class="empty"><div class="empty-icon">⏳</div><div class="empty-text">Loading…</div></div>`;
+  try {
+    const { data } = await api("GET", "/addon");
+    if (!data.ha_available) {
+      el.innerHTML = `<div class="alert" style="background:var(--surface);border:1px solid var(--border);padding:12px 16px;border-radius:6px;font-size:13px;color:var(--muted)">
+        Infos HA non disponibles en dehors de Home Assistant.</div>`;
+      return;
+    }
+    if (data.error) { el.innerHTML = `<div class="alert alert-error">${data.error}</div>`; return; }
+
+    const fmtTs = v => {
+      if (!v || v === 'unknown') return '—';
+      const d = new Date(v);
+      if (isNaN(d)) return v;
+      const diff = Math.round((Date.now() - d) / 1000);
+      const rel  = diff < 60 ? `${diff}s ago`
+                 : diff < 3600 ? `${Math.floor(diff/60)}min ago`
+                 : diff < 86400 ? `${Math.floor(diff/3600)}h ago`
+                 : `${Math.floor(diff/86400)}d ago`;
+      return `${d.toLocaleString()} <span style="color:var(--muted);font-size:11px">(${rel})</span>`;
+    };
+    const card = (title, body) => `
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;
+        padding:16px 20px;margin-bottom:14px">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+          letter-spacing:.08em;margin-bottom:12px">${title}</div>
+        ${body}
+      </div>`;
+    const row = (label, val) => `
+      <div style="display:flex;justify-content:space-between;align-items:baseline;
+        padding:4px 0;border-bottom:1px solid var(--border);font-size:13px">
+        <span style="color:var(--muted)">${label}</span>
+        <span style="font-family:var(--mono)">${val}</span>
+      </div>`;
+
+    const updateBadge = data.update_available
+      ? `<span style="background:#fef3c7;color:#d97706;padding:2px 8px;border-radius:10px;
+           font-size:11px;font-weight:600;margin-left:8px">update available</span>` : '';
+
+    let html = card('Version', `
+      ${row('Installée', `<strong>${data.version || '—'}</strong>${updateBadge}`)}
+      ${row('Disponible', data.version_latest || '—')}
+    `);
+
+    html += card('Dernier run', `
+      ${row('Date', fmtTs(data.last_run))}
+      ${row('Dernier PUT', fmtTs(data.last_put))}
+      ${row('API GET', data.api_get ?? '—')}
+      ${row('API PUT', data.api_put ?? '—')}
+    `);
+
+    html += card('Actions', `
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:4px">
+        <button class="btn btn-primary" onclick="addonRunNow(this)">▶ Run now</button>
+        ${data.update_available
+          ? `<button class="btn btn-secondary" onclick="addonUpdate(this)">⬆ Update to ${data.version_latest}</button>`
+          : `<button class="btn btn-secondary" disabled title="No update available">⬆ Update</button>`}
+      </div>
+    `);
+
+    el.innerHTML = html;
+  } catch(e) {
+    el.innerHTML = `<div class="alert alert-error">${e.message}</div>`;
+  }
+}
+
+async function addonRunNow(btn) {
+  btn.disabled = true; btn.textContent = '⏳ Running…';
+  try {
+    const { data } = await api("POST", "/run-now");
+    if (data.error) { toast(data.error, "err"); }
+    else { toast("Run triggered", "ok"); setTimeout(loadAddon, 2000); }
+  } catch(e) { toast(e.message, "err"); }
+  finally { btn.disabled = false; btn.textContent = '▶ Run now'; }
+}
+
+async function addonUpdate(btn) {
+  btn.disabled = true; btn.textContent = '⏳ Updating…';
+  try {
+    const { data } = await api("POST", "/addon/update");
+    if (data.error) toast(data.error, "err");
+    else toast("Update triggered — l'addon va redémarrer", "ok");
+  } catch(e) { toast(e.message, "err"); }
+  finally { btn.disabled = false; }
 }
 
 // ─────────────────────────────────────────────────────────────────────────
