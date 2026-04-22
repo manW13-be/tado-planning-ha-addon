@@ -2320,14 +2320,9 @@ async function addonCheckUpdate(btn) {
   try {
     const { data } = await api("POST", "/addon/check-update");
     if (data.error) { toast(data.error, "err"); return; }
-    const upBtn = document.getElementById("btn-do-update");
-    if (data.update_available) {
-      toast(`Update available: ${data.version_latest}`, "ok");
-      if (upBtn) { upBtn.disabled = false; upBtn.textContent = `⬆ Update to ${data.version_latest}`; upBtn.onclick = () => addonUpdate(upBtn); }
-    } else {
-      toast(`Already up to date (${data.version})`, "ok");
-      if (upBtn) { upBtn.disabled = true; upBtn.textContent = '⬆ Update'; }
-    }
+    if (data.update_available) toast(`Update available: ${data.version_latest}`, "ok");
+    else toast(`Already up to date (${data.version})`, "ok");
+    await loadAddon();
   } catch(e) { toast(e.message, "err"); }
   finally { btn.disabled = false; btn.textContent = '🔍 Check for updates'; }
 }
