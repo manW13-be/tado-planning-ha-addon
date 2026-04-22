@@ -164,6 +164,14 @@ body { font-family: var(--font); background: var(--bg); color: var(--text);
 
 /* ── ZONE EDITOR ── */
 .zone-list { display: flex; flex-direction: column; gap: 8px; }
+.af-table { width:100%; border-collapse:collapse; font-size:13px; }
+.af-table td { padding:4px 6px; vertical-align:top; }
+.af-label { color:var(--muted); width:120px; white-space:nowrap; }
+.af-icon { width:20px; text-align:center; }
+.af-ok { color:#16a34a; }
+.af-err { color:#dc2626; }
+.af-exp { color:#15803d; background:#f0fdf4; padding:1px 5px; border-radius:3px; font-family:var(--mono); font-size:12px; }
+.af-act { color:#b91c1c; background:#fef2f2; padding:1px 5px; border-radius:3px; font-family:var(--mono); font-size:12px; }
 .zone-card { border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
 .zone-card-header { display: flex; align-items: center; justify-content: space-between;
                     padding: 8px 12px; background: var(--bg); cursor: pointer; }
@@ -308,7 +316,15 @@ body { font-family: var(--font); background: var(--bg); color: var(--text);
       <path d="M8 2a6 6 0 1 0 0 12A6 6 0 0 0 8 2z"/>
       <path d="M8 5v3M8 10h.01" stroke-linecap="round"/>
     </svg>
-    Weekconfig
+    Weekconfig (actual)
+  </div>
+  <div class="nav-item" data-section="analysis" onclick="showSection('analysis')">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+      <path d="M2 12 L6 8 L9 10 L14 4" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="6" cy="8" r="1.5" fill="currentColor" stroke="none"/>
+      <circle cx="9" cy="10" r="1.5" fill="currentColor" stroke="none"/>
+    </svg>
+    Weekconfig (analysis)
   </div>
   <div class="nav-section">Configuration</div>
   <div class="nav-item" data-section="weekconfigs" onclick="showSection('weekconfigs')">
@@ -364,14 +380,25 @@ body { font-family: var(--font); background: var(--bg); color: var(--text);
     </div>
   </section>
 
-  <!-- ── WEEKCONFIG (Tado live state) ── -->
+  <!-- ── WEEKCONFIG (actual — Tado live state) ── -->
   <section class="section" id="sec-tado">
     <div class="section-header">
-      <h1>Weekconfig</h1>
+      <h1>Weekconfig (actual)</h1>
       <button class="btn btn-secondary btn-sm" onclick="loadTadoState()">↻ Refresh</button>
     </div>
     <div class="section-body" id="tadoStateBody">
       <div class="empty"><div class="empty-icon">📡</div><div class="empty-text">Click Refresh to read current Tado configuration</div></div>
+    </div>
+  </section>
+
+  <!-- ── WEEKCONFIG (analysis — expected vs actual) ── -->
+  <section class="section" id="sec-analysis">
+    <div class="section-header">
+      <h1>Weekconfig (analysis)</h1>
+      <button class="btn btn-secondary btn-sm" onclick="loadAnalysis()">↻ Refresh</button>
+    </div>
+    <div class="section-body" id="analysisBody">
+      <div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">Click Refresh to compare expected vs actual Tado configuration</div></div>
     </div>
   </section>
 
@@ -677,6 +704,7 @@ function showSection(id) {
   if (id === "weekconfigs") loadWeekconfigs();
   if (id === "plannings")   loadPlannings();
   if (id === "settings")    loadSettings();
+  if (id === "analysis")    loadAnalysis();
   if (id === "logs")        { loadLogs(); _startLogsAutoRefresh(); }
   if (id === "service")     loadServiceStatus();
   if (id !== "logs")        _stopLogsAutoRefresh();
@@ -2023,6 +2051,137 @@ function _tadoZoneCard(zname, zcfg) {
         <div><div class="form-label">Away mode</div>${awayLabel}</div>
         ${zcfg.away_enabled !== false ? `<div><div class="form-label">Away temp</div>${zcfg.away_temp != null ? zcfg.away_temp+'°C' : '—'}</div>` : ''}
       </div>
+    </div>
+  </div>`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// WEEKCONFIG (analysis)
+// ─────────────────────────────────────────────────────────────────────────
+async function loadAnalysis() {
+  const el = document.getElementById("analysisBody");
+  el.innerHTML = `<div class="empty"><div class="empty-icon">⏳</div><div class="empty-text">Fetching Tado state and computing simulation…</div></div>`;
+  try {
+    const [tadoRes, simRes] = await Promise.all([
+      api("GET", "/tado/zones"),
+      api("GET", "/simulate"),
+    ]);
+    if (tadoRes.data.error) { el.innerHTML = `<div class="alert alert-error">Tado: ${tadoRes.data.error}</div>`; return; }
+    if (simRes.data.error)  { el.innerHTML = `<div class="alert alert-error">Simulate: ${simRes.data.error}</div>`; return; }
+
+    const actual   = tadoRes.data.zones || {};
+    const expected = simRes.data.zones  || {};
+    const meta     = simRes.data.meta   || {};
+
+    const allZones = [...new Set([...Object.keys(expected), ...Object.keys(actual)])];
+    if (!allZones.length) {
+      el.innerHTML = `<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">No zones returned</div></div>`;
+      return;
+    }
+
+    let metaHtml = '';
+    if (meta.date) {
+      const l1s = [...new Set(Object.values(meta.l1_map || {}))].join(', ') || '—';
+      const l2s = [...new Set(Object.values(meta.l2_map || {}))].join(', ');
+      metaHtml = `<div style="margin-bottom:12px;background:var(--surface);border:1px solid var(--border);padding:8px 12px;border-radius:6px;font-size:13px">
+        <strong>${meta.weekday} ${meta.date}</strong> · ISO week ${meta.iso_week} · L1: ${l1s}${l2s?' · L2: '+l2s:''}
+      </div>`;
+    }
+
+    let html = metaHtml + '<div class="zone-list">';
+    for (const zname of allZones) html += _analysisZoneCard(zname, expected[zname], actual[zname]);
+    html += '</div>';
+    el.innerHTML = html;
+  } catch(e) {
+    el.innerHTML = `<div class="alert alert-error">${e.message}</div>`;
+  }
+}
+
+function _analysisZoneCard(zname, exp, act) {
+  if (!exp) return `<div class="zone-card"><div class="zone-card-header"><span class="zone-card-title">${zname}</span><span style="font-size:12px;color:var(--red)">Not in simulation</span></div></div>`;
+  if (!act) return `<div class="zone-card"><div class="zone-card-header"><span class="zone-card-title">${zname}</span><span style="font-size:12px;color:var(--red)">Not found in Tado</span></div></div>`;
+
+  const normPreheat = v => {
+    if (!v) return 'ECO';
+    const m = {off:'OFF',eco:'ECO',équilibre:'BALANCE',balance:'BALANCE',confort:'COMFORT',comfort:'COMFORT'};
+    return m[v.toLowerCase()] || v.toUpperCase();
+  };
+
+  const rows = [];
+  const okRow   = (label, val) =>
+    rows.push(`<tr><td class="af-label">${label}</td><td class="af-icon af-ok">✓</td><td class="af-val">${val}</td></tr>`);
+  const diffRow = (label, eVal, aVal) =>
+    rows.push(`<tr><td class="af-label">${label}</td><td class="af-icon af-err">✗</td><td class="af-val"><span class="af-exp">expected: ${eVal}</span>&nbsp;<span class="af-act">actual: ${aVal}</span></td></tr>`);
+
+  // timetable
+  const eTT = exp.timetable || null;
+  const aTT = act.timetable || null;
+  if (eTT || aTT) {
+    if (eTT === aTT) okRow('Timetable', eTT || '—');
+    else diffRow('Timetable', eTT || '—', aTT || '—');
+  }
+
+  // schedule slots per day
+  const ttKeys = TT_KEYS[eTT] || [];
+  for (const k of ttKeys) {
+    const norm = ss => (ss||[]).map(s => ({start:s.start, temp:Math.round(parseFloat(s.temp)*10)/10}))
+                               .sort((a,b) => a.start.localeCompare(b.start));
+    const eS = norm(exp[k]);
+    const aS = norm(act[k]);
+    const match = eS.length===aS.length && eS.every((s,i)=>s.start===aS[i].start && Math.abs(s.temp-aS[i].temp)<0.05);
+    if (match) {
+      okRow(k, `${eS.length} slot${eS.length!==1?'s':''}`);
+    } else {
+      const fmt = ss => ss.length ? ss.map(s=>`${s.start}→${s.temp}°C`).join(', ') : '(none)';
+      diffRow(k, fmt(eS), fmt(aS));
+    }
+  }
+
+  // early_start
+  if ('early_start' in exp || 'early_start' in act) {
+    const eE = exp.early_start ?? false;
+    const aE = act.early_start ?? false;
+    if (eE === aE) okRow('Early start', eE ? 'enabled' : 'disabled');
+    else diffRow('Early start', eE ? 'enabled' : 'disabled', aE ? 'enabled' : 'disabled');
+  }
+
+  // preheat
+  if ('preheat' in exp || 'preheat' in act) {
+    const eP = normPreheat(exp.preheat);
+    const aP = normPreheat(act.preheat);
+    if (eP === aP) okRow('Preheat', eP);
+    else diffRow('Preheat', eP, aP);
+  }
+
+  // away_temp
+  if ('away_temp' in exp || 'away_temp' in act) {
+    const eT = parseFloat(exp.away_temp);
+    const aT = parseFloat(act.away_temp);
+    if (!isNaN(eT) && !isNaN(aT) && Math.abs(eT-aT) < 0.05) okRow('Away temp', `${eT}°C`);
+    else diffRow('Away temp', isNaN(eT)?'—':eT+'°C', isNaN(aT)?'—':aT+'°C');
+  }
+
+  // away_enabled
+  if ('away_enabled' in exp || 'away_enabled' in act) {
+    const eA = exp.away_enabled ?? true;
+    const aA = act.away_enabled ?? true;
+    if (eA === aA) okRow('Away mode', eA ? 'enabled' : 'disabled');
+    else diffRow('Away mode', eA ? 'enabled' : 'disabled', aA ? 'enabled' : 'disabled');
+  }
+
+  const total   = rows.length;
+  const okCount = rows.filter(r => r.includes('af-ok')).length;
+  const allOk   = okCount === total;
+  const badge   = `<span style="font-size:12px;padding:2px 8px;border-radius:10px;background:${allOk?'#dcfce7':'#fee2e2'};color:${allOk?'#15803d':'#dc2626'}">${okCount}/${total}</span>`;
+
+  return `
+  <div class="zone-card">
+    <div class="zone-card-header" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'">
+      <span class="zone-card-title">${zname}</span>
+      ${badge}
+    </div>
+    <div class="zone-card-body">
+      <table class="af-table"><tbody>${rows.join('')}</tbody></table>
     </div>
   </div>`;
 }
