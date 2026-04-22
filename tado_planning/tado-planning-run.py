@@ -1035,6 +1035,7 @@ def cmd_simulate(date_str: str | None = None):
     zone_merged_map  = {}
     zone_l1_cfg_name = {}
     zone_l2_cfg_name = {}
+    _zone_raw        = {}   # {zone: (cfg_l1, cfg_l2, l1_name, l2_name)}
 
     for zone in all_zones:
         l1_cfg_name = next(
@@ -1053,10 +1054,31 @@ def cmd_simulate(date_str: str | None = None):
             zone_l2_cfg_name[zone] = l2_cfg_name
 
         zone_merged_map[zone] = merge_zone_configs(cfg_l1, cfg_l2)
+        _zone_raw[zone] = (cfg_l1, cfg_l2, l1_cfg_name, l2_cfg_name)
+
+    # Build per-field provenance: {zone: {field: {level, config}}}
+    provenance = {}
+    for zone, merged in zone_merged_map.items():
+        cfg_l1, cfg_l2, l1_name, l2_name = _zone_raw[zone]
+        prov = {}
+        for key in merged:
+            if cfg_l2 and "timetable" in cfg_l2:
+                # full L2 override — field comes from L2 if present there, else L1
+                if key in cfg_l2:
+                    prov[key] = {"level": 2, "config": l2_name}
+                else:
+                    prov[key] = {"level": 1, "config": l1_name}
+            elif cfg_l2 and key in _AWAY_KEYS and key in cfg_l2:
+                # away-only L2 — only away keys come from L2
+                prov[key] = {"level": 2, "config": l2_name}
+            else:
+                prov[key] = {"level": 1, "config": l1_name}
+        provenance[zone] = prov
 
     iso_week = now.isocalendar()[1]
     out = {
-        "zones": zone_merged_map,
+        "zones":      zone_merged_map,
+        "provenance": provenance,
         "meta": {
             "date":     now.strftime("%Y-%m-%d"),
             "weekday":  DAY_NAMES_EN[now.weekday()],
