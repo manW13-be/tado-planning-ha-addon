@@ -615,10 +615,12 @@ def select_config_for_level(events: list, level: int, now: datetime.datetime,
 # ---------------------------------------------------------------------------
 
 _api_stats: dict[str, int] = {"GET": 0, "PUT": 0}
+_last_put_time: list[str]  = []   # list so we can mutate from nested scope
 
 
 def tado_put(tado: Tado, command: str, payload):
     _api_stats["PUT"] += 1
+    _last_put_time[:] = [datetime.datetime.now().astimezone().isoformat()]
     log(f"[API]  PUT {command}", 4)
     log(f"       payload : {json.dumps(payload, ensure_ascii=False)}", 4)
     req    = TadoRequest(command=command, action=Action.CHANGE, payload=payload, mode=Mode.OBJECT)
@@ -639,6 +641,60 @@ def tado_get(tado: Tado, command: str):
 def log_api_stats():
     total = _api_stats["GET"] + _api_stats["PUT"]
     log(f"[API] {total} calls ({_api_stats['GET']} GET, {_api_stats['PUT']} PUT)")
+
+
+def push_ha_sensors():
+    """Push run stats to HA sensor entities. No-op outside HA (no SUPERVISOR_TOKEN)."""
+    token = os.environ.get("SUPERVISOR_TOKEN")
+    if not token:
+        return
+    try:
+        import requests as _req
+    except ImportError:
+        return
+
+    base    = "http://supervisor/core/api/states"
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    run_ts  = datetime.datetime.now().astimezone().isoformat()
+    total   = _api_stats["GET"] + _api_stats["PUT"]
+
+    sensors = [
+        ("sensor.tado_planning_last_run", {
+            "state": run_ts,
+            "attributes": {
+                "friendly_name": "Tado Planning — dernier run",
+                "device_class":  "timestamp",
+                "icon":          "mdi:clock-check",
+            },
+        }),
+        ("sensor.tado_planning_api_calls", {
+            "state": str(total),
+            "attributes": {
+                "friendly_name":      "Tado Planning — appels API (dernier run)",
+                "get_calls":          _api_stats["GET"],
+                "put_calls":          _api_stats["PUT"],
+                "unit_of_measurement": "calls",
+                "icon":               "mdi:api",
+            },
+        }),
+    ]
+    if _last_put_time:
+        sensors.append(("sensor.tado_planning_last_put", {
+            "state": _last_put_time[0],
+            "attributes": {
+                "friendly_name": "Tado Planning — dernier PUT",
+                "device_class":  "timestamp",
+                "icon":          "mdi:upload-network",
+            },
+        }))
+
+    for entity_id, payload in sensors:
+        try:
+            r = _req.post(f"{base}/{entity_id}", headers=headers,
+                          json=payload, timeout=5)
+            log(f"[HA] {entity_id} → HTTP {r.status_code}", 1)
+        except Exception as e:
+            log(f"[HA] Failed to update {entity_id}: {e}", 1)
 
 
 # ---------------------------------------------------------------------------
@@ -1227,6 +1283,7 @@ def main():
     log(f"[TADO] Home: '{home_name}'")
 
     apply_merged(tado, zone_merged_map, zone_l1_cfg_name, zone_l2_cfg_name)
+    push_ha_sensors()
 
 
 if __name__ == "__main__":
