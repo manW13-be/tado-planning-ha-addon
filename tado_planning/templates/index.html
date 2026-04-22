@@ -544,6 +544,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text);
           <option value="1000">1000 lines</option>
         </select>
         <button class="btn btn-secondary btn-sm" onclick="loadLogs()">↻ Refresh</button>
+        <button class="btn btn-secondary btn-sm" onclick="copyLogs(this)">⎘ Copy</button>
         <button class="btn btn-danger btn-sm" onclick="clearLogs()">Clear</button>
       </div>
     </div>
@@ -1986,6 +1987,17 @@ async function loadLogs() {
   } catch(e) {
     out.textContent = `Error loading logs: ${e.message}`;
   }
+}
+
+async function copyLogs(btn) {
+  const text = document.getElementById("log-output").innerText;
+  if (!text) { toast("No logs to copy", "err"); return; }
+  try {
+    await navigator.clipboard.writeText(text);
+    const orig = btn.textContent;
+    btn.textContent = "✓ Copied";
+    setTimeout(() => btn.textContent = orig, 1500);
+  } catch(e) { toast("Copy failed: " + e.message, "err"); }
 }
 
 async function clearLogs() {
