@@ -789,6 +789,8 @@ def zone_needs_update(tado: Tado, zone_id: int, zone_cfg: dict, zone_key: str,
             "confort": "COMFORT",   "comfort": "COMFORT",
         }
         preheat_level = preheat_map.get(zone_cfg.get("preheat", "eco").lower(), "ECO")
+        if zone_cfg.get("away_enabled") is False:
+            preheat_level = "OFF"
         away_temp     = float(zone_cfg.get("away_temp", 15.0))
         result   = tado_get(tado, f"zones/{zone_id}/awayConfiguration")
         actual_t = result.get("minimumAwayTemperature", {}).get("celsius") if isinstance(result, dict) else None
@@ -830,6 +832,8 @@ def apply_zone_config(tado: Tado, zone_id: int, zone_key: str, zone_cfg: dict):
             "confort": "COMFORT",   "comfort": "COMFORT",
         }
         preheat_level = preheat_map.get(zone_cfg.get("preheat", "eco").lower(), "ECO")
+        if zone_cfg.get("away_enabled") is False:
+            preheat_level = "OFF"
         away_temp     = zone_cfg.get("away_temp", 15.0)
         tado_put(tado, f"zones/{zone_id}/awayConfiguration", {
             "type":                    "HEATING",
