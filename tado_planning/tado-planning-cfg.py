@@ -1138,10 +1138,12 @@ def api_addon_update():
         return jsonify({"error": "Not running inside HA"}), 400
     try:
         import requests as _req
-        r = _req.post(f"{_SUP_BASE}/addons/self/update",
-                      headers=_ha_headers(),
-                      json={"backup": False},
-                      timeout=60)
+        hdrs = _ha_headers()
+        # "self" is not a valid store slug — resolve the actual slug first
+        r_info = _req.get(f"{_SUP_BASE}/addons/self/info", headers=hdrs, timeout=5)
+        slug = r_info.json().get("data", {}).get("slug") if r_info.ok else None
+        url  = f"{_SUP_BASE}/addons/{slug}/update" if slug else f"{_SUP_BASE}/addons/self/update"
+        r = _req.post(url, headers=hdrs, json={"backup": False}, timeout=60)
         if r.ok:
             return jsonify({"ok": True})
         return jsonify({"error": r.text}), 500
