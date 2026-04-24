@@ -626,6 +626,9 @@ def tado_put(tado: Tado, command: str, payload):
     req    = TadoRequest(command=command, action=Action.CHANGE, payload=payload, mode=Mode.OBJECT)
     result = tado._http.request(req)
     log(f"       response: {result}", 4)
+    # Http.request() has no raise_for_status — surface API errors explicitly
+    if isinstance(result, dict) and result.get("errors"):
+        log(f"[API ERROR] PUT {command} rejected: {result['errors']}")
     return result
 
 
@@ -928,18 +931,29 @@ def apply_zone_config(tado: Tado, zone_id: int, zone_key: str, zone_cfg: dict):
         if zone_cfg.get("away_enabled") is False:
             preheat_level = "OFF"
         away_temp = zone_cfg.get("away_temp", 15.0)
-        # Read existing config first to preserve fields Tado requires (comfortLevel…)
+        # Read existing config to log it and preserve the full temperature structure
         existing = tado_get(tado, f"zones/{zone_id}/awayConfiguration")
-        payload  = dict(existing) if isinstance(existing, dict) else {"type": "HEATING"}
-        payload["preheatingLevel"]        = preheat_level
-        payload["minimumAwayTemperature"] = {"celsius": float(away_temp)}
-        # autoAdjust=true lets Tado override preheatingLevel automatically — disable it
-        # so our explicit preheat value is actually applied and persisted.
-        if payload.get("autoAdjust"):
-            log(f"[INFO]  '{zone_key}' autoAdjust was True — forcing False to apply preheat={preheat_level}")
-            payload["autoAdjust"] = False
-        log(f"[PUT]  '{zone_key}' awayConfiguration: preheat={preheat_level} temp={away_temp}°C"
-            + (f" autoAdjust={payload.get('autoAdjust')}" if "autoAdjust" in payload else ""), 1)
+        log(f"[GET]  '{zone_key}' awayConfiguration existing: {existing}", 1)
+
+        # Build a clean payload — only the fields Tado accepts for PUT.
+        # Sending all fields from the GET response causes silent 4xx rejections
+        # because read-only or computed fields are not accepted on write.
+        ex = existing if isinstance(existing, dict) else {}
+        payload: dict = {"type": ex.get("type", "HEATING")}
+        # Preserve comfortLevel if present (Energy IQ setting)
+        if "comfortLevel" in ex:
+            payload["comfortLevel"] = ex["comfortLevel"]
+        # Disable autoAdjust so our explicit preheatingLevel is not overridden
+        payload["autoAdjust"]          = False
+        payload["preheatingLevel"]     = preheat_level
+        # Preserve full temperature structure (celsius + fahrenheit + precision)
+        if isinstance(ex.get("minimumAwayTemperature"), dict):
+            mat = dict(ex["minimumAwayTemperature"])
+            mat["celsius"] = float(away_temp)
+            payload["minimumAwayTemperature"] = mat
+        else:
+            payload["minimumAwayTemperature"] = {"celsius": float(away_temp)}
+        log(f"[PUT]  '{zone_key}' awayConfiguration payload: {payload}", 1)
         tado_put(tado, f"zones/{zone_id}/awayConfiguration", payload)
         log(f"[OK]   '{zone_key}' away: {away_temp}°C preheat={preheat_level}", 1)
 
