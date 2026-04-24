@@ -616,6 +616,7 @@ def select_config_for_level(events: list, level: int, now: datetime.datetime,
 
 _api_stats: dict[str, int] = {"GET": 0, "PUT": 0}
 _last_put_time: list[str]  = []   # list so we can mutate from nested scope
+_preheat_unsupported: set  = set() # zones where Tado rejected preheatingLevel
 
 
 def tado_put(tado: Tado, command: str, payload):
@@ -892,12 +893,17 @@ def zone_needs_update(tado: Tado, zone_id: int, zone_cfg: dict, zone_key: str,
             log(f"[DIFF]  '{zone_key}' away_temp: current={actual_t}, wanted={away_temp}", log_level)
             return True
         if actual_p != preheat_level:
-            if auto_adjust:
+            if zone_key in _preheat_unsupported:
+                log(f"[SKIP]  '{zone_key}' preheat={preheat_level} non supporté par cette zone "
+                    f"(Tado a refusé) — changez la config en ECO ou OFF.")
+                # Don't return True — preheat mismatch is a hardware constraint, not a transient diff
+            elif auto_adjust:
                 log(f"[DIFF]  '{zone_key}' preheat: current={actual_p}, wanted={preheat_level}"
                     f" (autoAdjust=true — will be disabled on apply)", log_level)
+                return True
             else:
                 log(f"[DIFF]  '{zone_key}' preheat: current={actual_p}, wanted={preheat_level}", log_level)
-            return True
+                return True
 
     return False
 
@@ -951,6 +957,13 @@ def apply_zone_config(tado: Tado, zone_id: int, zone_key: str, zone_cfg: dict):
         log(f"[AWAY] '{zone_key}' PUT  awayConfiguration: {payload}")
         result = tado_put(tado, f"zones/{zone_id}/awayConfiguration", payload)
         log(f"[AWAY] '{zone_key}' RESP awayConfiguration: {result}")
+        if isinstance(result, dict) and any(
+            e.get("code") == "typeMismatch" and "preheatingLevel" in e.get("title", "")
+            for e in result.get("errors", [])
+        ):
+            log(f"[WARN] '{zone_key}' preheat={preheat_level} refusé par Tado — "
+                f"cette zone ne supporte pas ce niveau. Changez la config en ECO ou OFF.")
+            _preheat_unsupported.add(zone_key)
 
 
 _AWAY_KEYS = ("away_temp", "away_enabled")
