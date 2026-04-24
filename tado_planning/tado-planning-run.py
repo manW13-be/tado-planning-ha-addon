@@ -209,7 +209,7 @@ def validate_zone_cfg(zone: str, cfg: object) -> list[str]:
     if "early_start" in cfg and not isinstance(cfg["early_start"], bool):
         errors.append(f"[VALIDATION] '{zone}': 'early_start' must be boolean")
 
-    VALID_PREHEAT = {"off", "eco", "balance", "comfort", "équilibre", "confort"}
+    VALID_PREHEAT = {"off", "eco", "balance", "comfort", "équilibre", "confort", "medium"}
     if "preheat" in cfg and cfg["preheat"].lower() not in VALID_PREHEAT:
         errors.append(f"[VALIDATION] '{zone}': invalid 'preheat' '{cfg['preheat']}'")
 
@@ -875,8 +875,8 @@ def zone_needs_update(tado: Tado, zone_id: int, zone_cfg: dict, zone_key: str,
     if any(k in zone_cfg for k in ("away_temp", "away_enabled", "preheat")):
         preheat_map = {
             "off": "OFF", "eco": "ECO",
-            "équilibre": "BALANCE", "balance": "BALANCE",
-            "confort": "COMFORT",   "comfort": "COMFORT",
+            "balance": "MEDIUM", "équilibre": "MEDIUM", "medium": "MEDIUM",
+            "comfort": "COMFORT", "confort": "COMFORT",
         }
         preheat_level = preheat_map.get(zone_cfg.get("preheat", "eco").lower(), "ECO")
         if zone_cfg.get("away_enabled") is False:
@@ -930,8 +930,8 @@ def apply_zone_config(tado: Tado, zone_id: int, zone_key: str, zone_cfg: dict):
     if any(k in zone_cfg for k in ("away_temp", "away_enabled", "preheat")):
         preheat_map = {
             "off": "OFF", "eco": "ECO",
-            "équilibre": "BALANCE", "balance": "BALANCE",
-            "confort": "COMFORT",   "comfort": "COMFORT",
+            "balance": "MEDIUM", "équilibre": "MEDIUM", "medium": "MEDIUM",
+            "comfort": "COMFORT", "confort": "COMFORT",
         }
         preheat_level = preheat_map.get(zone_cfg.get("preheat", "eco").lower(), "ECO")
         if zone_cfg.get("away_enabled") is False:
@@ -1078,7 +1078,7 @@ def cmd_tado_zones():
         "Mon-Fri, Sat, Sun": ["Mon-Fri", "Sat", "Sun"],
         "Mon, ..., Sun":     ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
     }
-    _PREHEAT_REVERSE = {"OFF": "off", "ECO": "ECO", "BALANCE": "BALANCE", "COMFORT": "COMFORT"}
+    _PREHEAT_REVERSE = {"OFF": "off", "ECO": "ECO", "MEDIUM": "BALANCE", "COMFORT": "COMFORT"}
 
     tado      = get_tado_client()
     all_zones = tado.get_zones()
