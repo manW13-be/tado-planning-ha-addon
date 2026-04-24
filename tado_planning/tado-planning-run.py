@@ -878,15 +878,22 @@ def zone_needs_update(tado: Tado, zone_id: int, zone_cfg: dict, zone_key: str,
         if zone_cfg.get("away_enabled") is False:
             preheat_level = "OFF"
         away_temp     = float(zone_cfg.get("away_temp", 15.0))
-        result   = tado_get(tado, f"zones/{zone_id}/awayConfiguration")
-        actual_t = result.get("minimumAwayTemperature", {}).get("celsius") if isinstance(result, dict) else None
-        actual_p = result.get("preheatingLevel") if isinstance(result, dict) else None
-        log(f"[CHECK] '{zone_key}' away: cfg_preheat={zone_cfg.get('preheat','(missing)')}→{preheat_level} tado={actual_p} | cfg_temp={zone_cfg.get('away_temp','(missing)')}→{away_temp} tado={actual_t}", 1)
+        result      = tado_get(tado, f"zones/{zone_id}/awayConfiguration")
+        actual_t    = result.get("minimumAwayTemperature", {}).get("celsius") if isinstance(result, dict) else None
+        actual_p    = result.get("preheatingLevel") if isinstance(result, dict) else None
+        auto_adjust = result.get("autoAdjust", False) if isinstance(result, dict) else False
+        log(f"[CHECK] '{zone_key}' away: cfg_preheat={zone_cfg.get('preheat','(missing)')}→{preheat_level} tado={actual_p}"
+            f" | cfg_temp={zone_cfg.get('away_temp','(missing)')}→{away_temp} tado={actual_t}"
+            + (f" | autoAdjust={auto_adjust}" if auto_adjust else ""), 1)
         if actual_t is None or abs(float(actual_t) - away_temp) > 0.01:
             log(f"[DIFF]  '{zone_key}' away_temp: current={actual_t}, wanted={away_temp}", log_level)
             return True
         if actual_p != preheat_level:
-            log(f"[DIFF]  '{zone_key}' preheat: current={actual_p}, wanted={preheat_level}", log_level)
+            if auto_adjust:
+                log(f"[DIFF]  '{zone_key}' preheat: current={actual_p}, wanted={preheat_level}"
+                    f" (autoAdjust=true — will be disabled on apply)", log_level)
+            else:
+                log(f"[DIFF]  '{zone_key}' preheat: current={actual_p}, wanted={preheat_level}", log_level)
             return True
 
     return False
@@ -921,11 +928,18 @@ def apply_zone_config(tado: Tado, zone_id: int, zone_key: str, zone_cfg: dict):
         if zone_cfg.get("away_enabled") is False:
             preheat_level = "OFF"
         away_temp = zone_cfg.get("away_temp", 15.0)
-        # Read existing config first to preserve fields Tado requires (comfortLevel, autoAdjust…)
+        # Read existing config first to preserve fields Tado requires (comfortLevel…)
         existing = tado_get(tado, f"zones/{zone_id}/awayConfiguration")
         payload  = dict(existing) if isinstance(existing, dict) else {"type": "HEATING"}
         payload["preheatingLevel"]        = preheat_level
         payload["minimumAwayTemperature"] = {"celsius": float(away_temp)}
+        # autoAdjust=true lets Tado override preheatingLevel automatically — disable it
+        # so our explicit preheat value is actually applied and persisted.
+        if payload.get("autoAdjust"):
+            log(f"[INFO]  '{zone_key}' autoAdjust was True — forcing False to apply preheat={preheat_level}")
+            payload["autoAdjust"] = False
+        log(f"[PUT]  '{zone_key}' awayConfiguration: preheat={preheat_level} temp={away_temp}°C"
+            + (f" autoAdjust={payload.get('autoAdjust')}" if "autoAdjust" in payload else ""), 1)
         tado_put(tado, f"zones/{zone_id}/awayConfiguration", payload)
         log(f"[OK]   '{zone_key}' away: {away_temp}°C preheat={preheat_level}", 1)
 
