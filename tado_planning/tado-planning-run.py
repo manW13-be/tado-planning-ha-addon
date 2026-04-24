@@ -878,9 +878,13 @@ def zone_needs_update(tado: Tado, zone_id: int, zone_cfg: dict, zone_key: str,
             "balance": "MEDIUM", "équilibre": "MEDIUM", "medium": "MEDIUM",
             "comfort": "COMFORT", "confort": "COMFORT",
         }
-        preheat_level = preheat_map.get(zone_cfg.get("preheat", "eco").lower(), "ECO")
-        if zone_cfg.get("away_enabled") is False:
+        away_disabled = zone_cfg.get("away_enabled") is False
+        if away_disabled:
             preheat_level = "OFF"
+        elif "timetable" in zone_cfg and "preheat" in zone_cfg:
+            preheat_level = preheat_map.get(zone_cfg["preheat"].lower(), "ECO")
+        else:
+            preheat_level = None  # away-only zone: preserve existing, don't compare
         away_temp     = float(zone_cfg.get("away_temp", 15.0))
         result      = tado_get(tado, f"zones/{zone_id}/awayConfiguration")
         actual_t    = result.get("minimumAwayTemperature", {}).get("celsius") if isinstance(result, dict) else None
@@ -892,7 +896,7 @@ def zone_needs_update(tado: Tado, zone_id: int, zone_cfg: dict, zone_key: str,
         if actual_t is None or abs(float(actual_t) - away_temp) > 0.01:
             log(f"[DIFF]  '{zone_key}' away_temp: current={actual_t}, wanted={away_temp}", log_level)
             return True
-        if actual_p != preheat_level:
+        if preheat_level is not None and actual_p != preheat_level:
             if zone_key in _preheat_unsupported:
                 log(f"[SKIP]  '{zone_key}' preheat={preheat_level} non supporté par cette zone "
                     f"(Tado a refusé) — changez la config en ECO ou OFF.")
@@ -933,9 +937,13 @@ def apply_zone_config(tado: Tado, zone_id: int, zone_key: str, zone_cfg: dict):
             "balance": "MEDIUM", "équilibre": "MEDIUM", "medium": "MEDIUM",
             "comfort": "COMFORT", "confort": "COMFORT",
         }
-        preheat_level = preheat_map.get(zone_cfg.get("preheat", "eco").lower(), "ECO")
-        if zone_cfg.get("away_enabled") is False:
+        away_disabled = zone_cfg.get("away_enabled") is False
+        if away_disabled:
             preheat_level = "OFF"
+        elif "timetable" in zone_cfg and "preheat" in zone_cfg:
+            preheat_level = preheat_map.get(zone_cfg["preheat"].lower(), "ECO")
+        else:
+            preheat_level = None  # away-only zone: preserve existing, don't touch
         away_temp = zone_cfg.get("away_temp", 15.0)
         # Read existing config to log it and preserve the full temperature structure
         existing = tado_get(tado, f"zones/{zone_id}/awayConfiguration")
@@ -946,8 +954,11 @@ def apply_zone_config(tado: Tado, zone_id: int, zone_key: str, zone_cfg: dict):
         payload: dict = {"type": ex.get("type", "HEATING")}
         if "comfortLevel" in ex:
             payload["comfortLevel"] = ex["comfortLevel"]
-        payload["autoAdjust"]      = False
-        payload["preheatingLevel"] = preheat_level
+        payload["autoAdjust"] = False
+        if preheat_level is not None:
+            payload["preheatingLevel"] = preheat_level
+        elif "preheatingLevel" in ex:
+            payload["preheatingLevel"] = ex["preheatingLevel"]  # preserve for away-only zones
         if isinstance(ex.get("minimumAwayTemperature"), dict):
             mat = dict(ex["minimumAwayTemperature"])
             mat["celsius"] = float(away_temp)
