@@ -1103,7 +1103,6 @@ function renderZoneCard(zname, zcfg) {
         <div class="form-group">
           <label class="form-label">Preheat before arrival</label>
           <select class="form-select" id="wc-preheat-${zname}"
-                  ${zcfg.away_enabled===false?'disabled':''}
                   onchange="wcSetMeta('${zname}','preheat',this.value)">
             ${PREHEAT_OPTS.map(p => `<option${((zcfg.preheat==='medium'?'BALANCE':zcfg.preheat)||'ECO')===p?' selected':''}>${p}</option>`).join("")}
           </select>
@@ -1124,7 +1123,6 @@ function renderZoneCard(zname, zcfg) {
             const _en=this.value==='away_temp';
             wcSetMeta('${zname}','away_enabled',_en);
             document.getElementById('wc-away-temp-${zname}').style.display=_en?'':'none';
-            const _ps=document.getElementById('wc-preheat-${zname}');if(_ps)_ps.disabled=!_en;
           ">
             <option value="away_temp"${zcfg.away_enabled!==false?' selected':''}>Away temp</option>
             <option value="no_frost"${zcfg.away_enabled===false?' selected':''}>No frost</option>
