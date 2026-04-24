@@ -1138,10 +1138,61 @@ def api_addon_update():
         return jsonify({"error": "Not running inside HA"}), 400
     try:
         import requests as _req
-        r = _req.post(f"{_SUP_BASE}/addons/self/update", headers=_ha_headers(), timeout=60)
+        r = _req.post(f"{_SUP_BASE}/addons/self/update",
+                      headers=_ha_headers(),
+                      json={"backup": False},
+                      timeout=60)
         if r.ok:
             return jsonify({"ok": True})
         return jsonify({"error": r.text}), 500
+    except _req.exceptions.ConnectionError:
+        # Addon restarted mid-request — update was triggered successfully
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/addon/verbosity", methods=["GET"])
+def api_addon_verbosity_get():
+    token = os.environ.get("SUPERVISOR_TOKEN")
+    if not token:
+        return jsonify({"verbosity": load_settings().get("verbosity", 0)})
+    try:
+        import requests as _req
+        r = _req.get(f"{_SUP_BASE}/addons/self/info", headers=_ha_headers(), timeout=5)
+        v = r.json().get("data", {}).get("options", {}).get("verbosity", 0) if r.ok else 0
+        return jsonify({"verbosity": int(v)})
+    except Exception as e:
+        return jsonify({"verbosity": 0, "error": str(e)})
+
+
+@app.route("/api/addon/verbosity", methods=["POST"])
+def api_addon_verbosity_set():
+    body = request.get_json() or {}
+    try:
+        level = int(body.get("verbosity", 0))
+        if not 0 <= level <= 4:
+            raise ValueError
+    except (ValueError, TypeError):
+        return jsonify({"error": "verbosity must be 0–4"}), 422
+
+    token = os.environ.get("SUPERVISOR_TOKEN")
+    if not token:
+        s = load_settings()
+        s["verbosity"] = level
+        save_settings(s)
+        return jsonify({"ok": True})
+    try:
+        import requests as _req
+        # Read current options, then patch verbosity
+        r = _req.get(f"{_SUP_BASE}/addons/self/info", headers=_ha_headers(), timeout=5)
+        opts = r.json().get("data", {}).get("options", {}) if r.ok else {}
+        opts["verbosity"] = level
+        r2 = _req.post(f"{_SUP_BASE}/addons/self/options",
+                       headers=_ha_headers(), json={"options": opts}, timeout=10)
+        if r2.ok:
+            return jsonify({"ok": True})
+        return jsonify({"error": r2.text}), 500
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
