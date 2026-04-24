@@ -116,6 +116,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text);
                              border-radius: 6px; font-size: 13.5px; background: var(--surface);
                              color: var(--text); transition: border-color .15s; }
 .form-input:focus, .form-select:focus { outline: none; border-color: var(--accent); }
+.form-input:disabled, .form-select:disabled { opacity: .45; cursor: not-allowed; }
 .form-input.error { border-color: var(--red); }
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .form-hint { font-size: 11.5px; color: var(--muted); margin-top: 4px; }
@@ -1099,7 +1100,9 @@ function renderZoneCard(zname, zcfg) {
       <div class="form-row" style="margin-bottom:16px">
         <div class="form-group">
           <label class="form-label">Preheat before arrival</label>
-          <select class="form-select" onchange="wcSetMeta('${zname}','preheat',this.value)">
+          <select class="form-select" id="wc-preheat-${zname}"
+                  ${zcfg.away_enabled===false?'disabled':''}
+                  onchange="wcSetMeta('${zname}','preheat',this.value)">
             ${PREHEAT_OPTS.map(p => `<option${(zcfg.preheat||'ECO')===p?' selected':''}>${p}</option>`).join("")}
           </select>
         </div>
@@ -1115,7 +1118,12 @@ function renderZoneCard(zname, zcfg) {
       <div class="form-row" style="margin-bottom:12px">
         <div class="form-group">
           <label class="form-label">Away mode</label>
-          <select class="form-select" onchange="wcSetMeta('${zname}','away_enabled',this.value==='away_temp');document.getElementById('wc-away-temp-${zname}').style.display=this.value==='away_temp'?'':'none'">
+          <select class="form-select" onchange="
+            const _en=this.value==='away_temp';
+            wcSetMeta('${zname}','away_enabled',_en);
+            document.getElementById('wc-away-temp-${zname}').style.display=_en?'':'none';
+            const _ps=document.getElementById('wc-preheat-${zname}');if(_ps)_ps.disabled=!_en;
+          ">
             <option value="away_temp"${zcfg.away_enabled!==false?' selected':''}>Away temp</option>
             <option value="no_frost"${zcfg.away_enabled===false?' selected':''}>No frost</option>
           </select>
@@ -1993,7 +2001,19 @@ async function copyLogs(btn) {
   const text = document.getElementById("log-output").innerText;
   if (!text) { toast("No logs to copy", "err"); return; }
   try {
-    await navigator.clipboard.writeText(text);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      // Fallback for HTTP / HA ingress contexts
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.cssText = "position:fixed;top:-9999px;left:-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      if (!ok) throw new Error("execCommand copy failed");
+    }
     const orig = btn.textContent;
     btn.textContent = "✓ Copied";
     setTimeout(() => btn.textContent = orig, 1500);
@@ -2299,7 +2319,30 @@ async function loadAddon() {
       </div>
     `);
 
+    html += card('Configuration', `
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <div style="flex:1;min-width:200px">
+          <label class="form-label" style="margin-bottom:6px">Verbosity du scheduler</label>
+          <select class="form-select" id="addon-verbosity-select" onchange="addonSetVerbosity(this)">
+            ${[
+              [0, "0 — Minimal : résumé du run uniquement"],
+              [1, "1 — Standard : + détails par zone"],
+              [2, "2 — Verbose : + candidats de cycle"],
+              [3, "3 — Debug : + blocs envoyés à l'API"],
+              [4, "4 — Trace : + PUT/GET bruts"],
+            ].map(([v,l]) => `<option value="${v}">${l}</option>`).join('')}
+          </select>
+        </div>
+        <button class="btn btn-secondary" style="margin-top:18px" id="addon-verbosity-btn"
+                onclick="addonSaveVerbosity(this)" disabled>Appliquer</button>
+      </div>
+      <div style="margin-top:8px;font-size:11px;color:var(--muted)" id="addon-verbosity-hint">
+        Chargement…
+      </div>
+    `);
+
     el.innerHTML = html;
+    loadAddonVerbosity();
   } catch(e) {
     el.innerHTML = `<div class="alert alert-error">${e.message}</div>`;
   }
@@ -2332,9 +2375,55 @@ async function addonUpdate(btn) {
   try {
     const { data } = await api("POST", "/addon/update");
     if (data.error) toast(data.error, "err");
-    else toast("Update triggered — l'addon va redémarrer", "ok");
-  } catch(e) { toast(e.message, "err"); }
+    else toast("Mise à jour lancée — l'addon va redémarrer", "ok");
+  } catch(e) {
+    // Network error = addon restarted itself = update triggered successfully
+    if (e.message === "Failed to fetch" || e instanceof TypeError) {
+      toast("Mise à jour lancée — l'addon va redémarrer", "ok");
+    } else {
+      toast(e.message, "err");
+    }
+  }
   finally { btn.disabled = false; }
+}
+
+let _addonVerbosityCurrent = 0;
+
+async function loadAddonVerbosity() {
+  const sel  = document.getElementById("addon-verbosity-select");
+  const hint = document.getElementById("addon-verbosity-hint");
+  const btn  = document.getElementById("addon-verbosity-btn");
+  if (!sel) return;
+  try {
+    const { data } = await api("GET", "/addon/verbosity");
+    _addonVerbosityCurrent = data.verbosity ?? 0;
+    sel.value = _addonVerbosityCurrent;
+    hint.textContent = "Prise en compte au prochain cycle du scheduler, sans redémarrage.";
+    btn.disabled = true;
+  } catch(e) {
+    hint.textContent = `Erreur : ${e.message}`;
+  }
+}
+
+function addonSetVerbosity(sel) {
+  const btn = document.getElementById("addon-verbosity-btn");
+  if (btn) btn.disabled = (parseInt(sel.value) === _addonVerbosityCurrent);
+}
+
+async function addonSaveVerbosity(btn) {
+  const sel = document.getElementById("addon-verbosity-select");
+  if (!sel) return;
+  const level = parseInt(sel.value);
+  btn.disabled = true; btn.textContent = '⏳…';
+  try {
+    const { data } = await api("POST", "/addon/verbosity", { verbosity: level });
+    if (data.error) { toast(data.error, "err"); return; }
+    _addonVerbosityCurrent = level;
+    toast(`Verbosity ${level} enregistrée`, "ok");
+    document.getElementById("addon-verbosity-hint").textContent =
+      "Prise en compte au prochain cycle du scheduler, sans redémarrage.";
+  } catch(e) { toast(e.message, "err"); }
+  finally { btn.textContent = 'Appliquer'; btn.disabled = true; }
 }
 
 // ─────────────────────────────────────────────────────────────────────────
