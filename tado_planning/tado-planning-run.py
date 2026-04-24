@@ -933,29 +933,24 @@ def apply_zone_config(tado: Tado, zone_id: int, zone_key: str, zone_cfg: dict):
         away_temp = zone_cfg.get("away_temp", 15.0)
         # Read existing config to log it and preserve the full temperature structure
         existing = tado_get(tado, f"zones/{zone_id}/awayConfiguration")
-        log(f"[GET]  '{zone_key}' awayConfiguration existing: {existing}", 1)
+        log(f"[AWAY] '{zone_key}' GET  awayConfiguration: {existing}")
 
         # Build a clean payload — only the fields Tado accepts for PUT.
-        # Sending all fields from the GET response causes silent 4xx rejections
-        # because read-only or computed fields are not accepted on write.
         ex = existing if isinstance(existing, dict) else {}
         payload: dict = {"type": ex.get("type", "HEATING")}
-        # Preserve comfortLevel if present (Energy IQ setting)
         if "comfortLevel" in ex:
             payload["comfortLevel"] = ex["comfortLevel"]
-        # Disable autoAdjust so our explicit preheatingLevel is not overridden
-        payload["autoAdjust"]          = False
-        payload["preheatingLevel"]     = preheat_level
-        # Preserve full temperature structure (celsius + fahrenheit + precision)
+        payload["autoAdjust"]      = False
+        payload["preheatingLevel"] = preheat_level
         if isinstance(ex.get("minimumAwayTemperature"), dict):
             mat = dict(ex["minimumAwayTemperature"])
             mat["celsius"] = float(away_temp)
             payload["minimumAwayTemperature"] = mat
         else:
             payload["minimumAwayTemperature"] = {"celsius": float(away_temp)}
-        log(f"[PUT]  '{zone_key}' awayConfiguration payload: {payload}", 1)
-        tado_put(tado, f"zones/{zone_id}/awayConfiguration", payload)
-        log(f"[OK]   '{zone_key}' away: {away_temp}°C preheat={preheat_level}", 1)
+        log(f"[AWAY] '{zone_key}' PUT  awayConfiguration: {payload}")
+        result = tado_put(tado, f"zones/{zone_id}/awayConfiguration", payload)
+        log(f"[AWAY] '{zone_key}' RESP awayConfiguration: {result}")
 
 
 _AWAY_KEYS = ("away_temp", "away_enabled")
