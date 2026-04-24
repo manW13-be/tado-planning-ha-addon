@@ -944,6 +944,8 @@ function normalizeZone(zcfg) {
     if (!("away_temp"    in zcfg)) zcfg.away_temp    = 15;
     if (!("away_enabled" in zcfg)) zcfg.away_enabled = true;
     if (!("preheat"      in zcfg)) zcfg.preheat      = "ECO";
+    // Tado returns "MEDIUM" for Balance; normalize to our canonical "BALANCE"
+    if (zcfg.preheat === "medium" || zcfg.preheat === "MEDIUM") zcfg.preheat = "BALANCE";
   }
   if ("timetable" in zcfg && !("early_start" in zcfg)) zcfg.early_start = false;
   return zcfg;
@@ -1103,7 +1105,7 @@ function renderZoneCard(zname, zcfg) {
           <select class="form-select" id="wc-preheat-${zname}"
                   ${zcfg.away_enabled===false?'disabled':''}
                   onchange="wcSetMeta('${zname}','preheat',this.value)">
-            ${PREHEAT_OPTS.map(p => `<option${(zcfg.preheat||'ECO')===p?' selected':''}>${p}</option>`).join("")}
+            ${PREHEAT_OPTS.map(p => `<option${((zcfg.preheat==='medium'?'BALANCE':zcfg.preheat)||'ECO')===p?' selected':''}>${p}</option>`).join("")}
           </select>
         </div>
         <div class="form-group">
@@ -2161,7 +2163,7 @@ function _analysisZoneCard(zname, exp, act, prov) {
 
   const normPreheat = v => {
     if (!v) return 'ECO';
-    const m = {off:'OFF',eco:'ECO',équilibre:'BALANCE',balance:'BALANCE',confort:'COMFORT',comfort:'COMFORT'};
+    const m = {off:'OFF',eco:'ECO',équilibre:'BALANCE',balance:'BALANCE',medium:'BALANCE',confort:'COMFORT',comfort:'COMFORT'};
     return m[v.toLowerCase()] || v.toUpperCase();
   };
   const provTag = key => {
