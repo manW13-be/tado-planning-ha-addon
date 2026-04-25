@@ -452,8 +452,8 @@ Zone names must match your Tado zone names exactly. Run `./scripts/list_zones.sh
 | `Mon-Sun` / `Mon-Fri` / etc. | array | Time blocks: `[{ "start": "HH:MM", "temp": N }, ...]` |
 | `away_temp` | number | Minimum temperature in away mode (°C) |
 | `away_enabled` | boolean | Enable or disable Tado away mode |
-| `preheat` | `off`, `ECO`, `BALANCE`, `COMFORT` | Tado preheat setting |
-| `early_start` | boolean | Tado early start feature |
+| `preheat` | `off`, `ECO`, `BALANCE`, `COMFORT` | Tado preheat setting — only applies when a `timetable` is defined |
+| `early_start` | boolean | Tado early start feature — only applies when a `timetable` is defined |
 
 A weekconfig that only sets `away_temp` / `away_enabled` (like `away_15deg`) does not need a `timetable` — it will only touch those specific settings on Tado.
 
