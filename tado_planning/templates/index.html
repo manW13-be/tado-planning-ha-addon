@@ -2334,17 +2334,6 @@ async function loadAddon() {
     }
     if (data.error) { el.innerHTML = `<div class="alert alert-error">${data.error}</div>`; return; }
 
-    const fmtTs = v => {
-      if (!v || v === 'unknown') return '—';
-      const d = new Date(v);
-      if (isNaN(d)) return v;
-      const diff = Math.round((Date.now() - d) / 1000);
-      const rel  = diff < 60 ? `${diff}s ago`
-                 : diff < 3600 ? `${Math.floor(diff/60)}min ago`
-                 : diff < 86400 ? `${Math.floor(diff/3600)}h ago`
-                 : `${Math.floor(diff/86400)}d ago`;
-      return `${d.toLocaleString()} <span style="color:var(--muted);font-size:11px">(${rel})</span>`;
-    };
     const card = (title, body) => `
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;
         padding:16px 20px;margin-bottom:14px">
@@ -2369,8 +2358,8 @@ async function loadAddon() {
     `);
 
     html += card('Dernier run', `
-      ${row('Date', fmtTs(data.last_run))}
-      ${row('Dernier PUT', fmtTs(data.last_put))}
+      ${row('Date', fmtDate(data.last_run))}
+      ${row('Dernier PUT', fmtDate(data.last_put))}
       ${row('API GET', data.api_get ?? '—')}
       ${row('API PUT', data.api_put ?? '—')}
     `);
