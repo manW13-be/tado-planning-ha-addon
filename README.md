@@ -1,6 +1,6 @@
 # tado-planning
 
-> **Version 1.2.54**
+> **Version 1.2.55**
 
 Automated Tado heating schedule management for households with a **shared custody cycle** — and beyond.
 
@@ -337,7 +337,7 @@ The web configurator manages all schedule data through a browser UI. It is avail
 | **Status** | Current resolved configuration per zone and per level, active planning, 14-day timeline |
 | **Weekconfig (actual)** | Live Tado state per zone — timetable type, time events, away and preheat settings. The current day's tab is pre-selected automatically |
 | **Weekconfig (analysis)** | Side-by-side comparison of expected (simulated) vs actual (Tado live) configuration per zone, with L1/L2 provenance per field |
-| **Weekconfigs** | Create, edit, copy, rename, delete zone configuration profiles. Zones can be copied from any weekconfig, including the current one |
+| **Weekconfigs** | Create, edit, copy, rename, delete zone configuration profiles. **+ Copy zone** copies a single zone from any config; **++ Copy zones** opens a matrix picker to copy multiple zones from multiple configs in one operation |
 | **Plannings** | Create, edit, copy, rename, delete plannings (standard + exceptions) |
 | **Settings** | Scheduler loop interval, default zone template for new weekconfigs |
 | **Logs** | Live log viewer with colour-coded entries, auto-refresh, manual clear |
