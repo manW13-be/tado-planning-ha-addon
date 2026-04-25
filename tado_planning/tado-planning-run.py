@@ -617,6 +617,7 @@ def select_config_for_level(events: list, level: int, now: datetime.datetime,
 _api_stats: dict[str, int] = {"GET": 0, "PUT": 0}
 _last_put_time: list[str]  = []   # list so we can mutate from nested scope
 _preheat_unsupported: set  = set() # zones where Tado rejected preheatingLevel
+_auth_not_validated_logged = False  # suppress repeated "not validated yet" lines
 
 
 def tado_put(tado: Tado, command: str, payload):
@@ -754,6 +755,8 @@ def get_tado_client() -> Tado:
                 sys.exit(1)
 
     if tado.device_activation_status().value == "PENDING":
+        global _auth_not_validated_logged
+        _auth_not_validated_logged = False
         url = tado.device_verification_url()
         log(f"\n[AUTH] ╔══════════════════════════════════════════════════════╗")
         log(f"[AUTH] ║         FIRST CONNECTION REQUIRED                   ║")
@@ -764,17 +767,24 @@ def get_tado_client() -> Tado:
         log(f"[AUTH] ║                                                      ║")
         log(f"[AUTH] ║ The token will be saved automatically.              ║")
         log(f"[AUTH] ╚══════════════════════════════════════════════════════╝\n")
+        log(f"[AUTH] URL: {url}")
         try:
             webbrowser.open_new_tab(url)
         except Exception:
             pass
         log("[AUTH] Waiting for validation...")
+        _retry = 0
         while True:
             try:
                 tado.device_activation()
                 break
-            except Exception as ex:
-                log(f"[AUTH] Not validated yet, retrying in 10s... ({ex})")
+            except Exception:
+                if not _auth_not_validated_logged:
+                    log("[AUTH] Not validated yet — retrying every 10s…")
+                    _auth_not_validated_logged = True
+                _retry += 1
+                if _retry % 6 == 0:  # repeat URL every ~60s
+                    log(f"[AUTH] URL: {url}")
                 time.sleep(10)
                 tado = Tado(token_file_path=TOKEN_FILE)
 
