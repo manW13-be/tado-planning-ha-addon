@@ -906,20 +906,21 @@ def zone_needs_update(tado: Tado, zone_id: int, zone_cfg: dict, zone_key: str,
 
     if any(k in zone_cfg for k in ("away_temp", "away_enabled", "preheat")):
         if "timetable" in zone_cfg and "preheat" in zone_cfg:
-            # preheat=OFF means no frost; any other value means away enabled at that level
             preheat_level = PREHEAT_TO_API.get(zone_cfg["preheat"].lower(), "ECO")
         else:
             preheat_level = None                # away-only zone: preserve existing, don't compare
-        away_temp     = float(zone_cfg.get("away_temp", 15.0))
+        away_enabled   = zone_cfg.get("away_enabled", True)
+        # no frost = 5°C in Tado API; away_enabled and preheat are independent
+        effective_temp = 5.0 if not away_enabled else float(zone_cfg.get("away_temp", 15.0))
         result      = tado_get(tado, f"zones/{zone_id}/awayConfiguration")
         actual_t    = result.get("minimumAwayTemperature", {}).get("celsius") if isinstance(result, dict) else None
         actual_p    = result.get("preheatingLevel") if isinstance(result, dict) else None
         auto_adjust = result.get("autoAdjust", False) if isinstance(result, dict) else False
         log(f"[CHECK] '{zone_key}' away: cfg_preheat={zone_cfg.get('preheat','(missing)')}→{preheat_level} tado={actual_p}"
-            f" | cfg_temp={zone_cfg.get('away_temp','(missing)')}→{away_temp} tado={actual_t}"
+            f" | cfg_away_enabled={away_enabled}→{effective_temp}°C tado={actual_t}"
             + (f" | autoAdjust={auto_adjust}" if auto_adjust else ""), 1)
-        if actual_t is None or abs(float(actual_t) - away_temp) > 0.01:
-            log(f"[DIFF]  '{zone_key}' away_temp: current={actual_t}, wanted={away_temp}", log_level)
+        if actual_t is None or abs(float(actual_t) - effective_temp) > 0.01:
+            log(f"[DIFF]  '{zone_key}' away_temp: current={actual_t}, wanted={effective_temp}", log_level)
             return True
         if preheat_level is not None and actual_p != preheat_level:
             if zone_key in _preheat_unsupported:
@@ -958,11 +959,12 @@ def apply_zone_config(tado: Tado, zone_id: int, zone_key: str, zone_cfg: dict):
 
     if any(k in zone_cfg for k in ("away_temp", "away_enabled", "preheat")):
         if "timetable" in zone_cfg and "preheat" in zone_cfg:
-            # preheat=OFF means no frost; any other value means away enabled at that level
             preheat_level = PREHEAT_TO_API.get(zone_cfg["preheat"].lower(), "ECO")
         else:
             preheat_level = None                # away-only zone: preserve existing, don't touch
-        away_temp = zone_cfg.get("away_temp", 15.0)
+        away_enabled   = zone_cfg.get("away_enabled", True)
+        # no frost = 5°C in Tado API; away_enabled and preheat are independent
+        effective_temp = 5.0 if not away_enabled else float(zone_cfg.get("away_temp", 15.0))
         # Read existing config to log it and preserve the full temperature structure
         existing = tado_get(tado, f"zones/{zone_id}/awayConfiguration")
         log(f"[AWAY] '{zone_key}' GET  awayConfiguration: {existing}")
@@ -979,10 +981,10 @@ def apply_zone_config(tado: Tado, zone_id: int, zone_key: str, zone_cfg: dict):
             payload["preheatingLevel"] = ex["preheatingLevel"]  # preserve for away-only zones
         if isinstance(ex.get("minimumAwayTemperature"), dict):
             mat = dict(ex["minimumAwayTemperature"])
-            mat["celsius"] = float(away_temp)
+            mat["celsius"] = effective_temp
             payload["minimumAwayTemperature"] = mat
         else:
-            payload["minimumAwayTemperature"] = {"celsius": float(away_temp)}
+            payload["minimumAwayTemperature"] = {"celsius": effective_temp}
         log(f"[AWAY] '{zone_key}' PUT  awayConfiguration: {payload}")
         result = tado_put(tado, f"zones/{zone_id}/awayConfiguration", payload)
         log(f"[AWAY] '{zone_key}' RESP awayConfiguration: {result}")
@@ -1088,7 +1090,8 @@ def print_config_summary(config_name: str, zone_cfg_map: dict, level: int):
                 PREHEAT_TO_API.get(raw_preheat.lower(), ""), raw_preheat.upper()
             ) if raw_preheat else "(not set → ECO)"
             away_temp   = cfg.get("away_temp")
-            away_mode   = "no frost (disabled)" if preheat_str == "OFF" else "enabled"
+            away_en     = cfg.get("away_enabled", True)
+            away_mode   = "no frost (disabled)" if not away_en else "enabled"
             log(f"    Preheat      : {preheat_str}", 1)
             log(f"    Away mode    : {away_mode}", 1)
             log(f"    Away temp    : {f'{away_temp}°C' if away_temp is not None else '(not set → 15°C)'}", 1)
@@ -1141,9 +1144,11 @@ def cmd_tado_zones():
             if isinstance(away, dict):
                 pl  = away.get("preheatingLevel", "ECO")
                 mat = away.get("minimumAwayTemperature")
+                away_celsius = mat.get("celsius") if isinstance(mat, dict) else None
                 zcfg["preheat"]      = PREHEAT_TO_DISPLAY.get(pl, (pl or "ECO"))
-                zcfg["away_temp"]    = mat.get("celsius") if isinstance(mat, dict) else None
-                zcfg["away_enabled"] = pl != "OFF"
+                zcfg["away_temp"]    = away_celsius
+                # no frost = minimumAwayTemperature=5°C; preheat is independent
+                zcfg["away_enabled"] = away_celsius is None or abs(float(away_celsius) - 5.0) >= 0.1
             result[zname] = zcfg
         except Exception as e:
             errors.append(f"{zname}: {e}")
