@@ -2148,10 +2148,10 @@ function _tadoZoneCard(zname, zcfg) {
         ).join('')}</div>` : '';
     slotsHtml = tabBtns + keys.map((k,i) => `
       <div class="tt-pane" id="tado-z-${zname}-${k}" style="${i>0?'display:none':''}">
-        <table class="slots-table">
+        <table class="slots-table" style="table-layout:fixed">
           <tr>
-            <th style="padding-left:0">Start</th>
-            <th style="padding-left:0">Temp °C</th>
+            <th style="padding-left:0;width:50%">Start</th>
+            <th style="padding-left:0;width:50%">Temp °C</th>
           </tr>
           ${(zcfg[k]||[]).map(s=>`<tr>
             <td style="padding:3px 0;font-family:var(--mono);font-size:12px">${s.start}</td>
