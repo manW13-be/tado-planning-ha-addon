@@ -2149,10 +2149,13 @@ function _tadoZoneCard(zname, zcfg) {
     slotsHtml = tabBtns + keys.map((k,i) => `
       <div class="tt-pane" id="tado-z-${zname}-${k}" style="${i>0?'display:none':''}">
         <table class="slots-table">
-          <tr><th>Start</th><th>Temp °C</th></tr>
+          <tr>
+            <th style="padding-left:0">Start</th>
+            <th style="padding-left:0">Temp °C</th>
+          </tr>
           ${(zcfg[k]||[]).map(s=>`<tr>
-            <td style="font-family:var(--mono);font-size:12px">${s.start}</td>
-            <td style="font-family:var(--mono);font-size:12px">${s.temp != null ? s.temp+'°C' : '—'}</td>
+            <td style="padding:3px 0;font-family:var(--mono);font-size:12px">${s.start}</td>
+            <td style="padding:3px 0;font-family:var(--mono);font-size:12px">${s.temp != null ? s.temp+'°C' : '—'}</td>
           </tr>`).join('')}
         </table>
       </div>`).join('');
@@ -2166,25 +2169,25 @@ function _tadoZoneCard(zname, zcfg) {
     <div class="zone-card-body">
       ${hasTT ? slotsHtml : ''}
       ${hasTT ? `
-      <div class="form-section-title">Schedule</div>
+      <div class="form-section-title" style="margin-top:14px">Schedule</div>
       <div class="form-row" style="margin-bottom:16px">
-        <div class="form-group">
+        <div class="form-group" style="margin-bottom:0">
           <label class="form-label">Preheat before arrival</label>
           <div class="form-value">${normPreheat(zcfg.preheat) || '—'}</div>
         </div>
-        <div class="form-group">
+        <div class="form-group" style="margin-bottom:0">
           <label class="form-label">Early start</label>
           <div class="form-value">${zcfg.early_start ? 'Start before' : 'Start after'}</div>
         </div>
       </div>` : ''}
-      <div class="form-section-title">Away</div>
-      <div class="form-row" style="margin-bottom:12px">
-        <div class="form-group">
+      <div class="form-section-title"${hasTT ? '' : ' style="margin-top:0"'}>Away</div>
+      <div class="form-row" style="margin-bottom:0">
+        <div class="form-group" style="margin-bottom:0">
           <label class="form-label">Away mode</label>
           <div class="form-value">${zcfg.away_enabled !== false ? 'Away temp' : 'No frost'}</div>
         </div>
         ${zcfg.away_enabled !== false ? `
-        <div class="form-group">
+        <div class="form-group" style="margin-bottom:0">
           <label class="form-label">Away temp (°C)</label>
           <div class="form-value">${zcfg.away_temp != null ? zcfg.away_temp+'°C' : '—'}</div>
         </div>` : ''}
