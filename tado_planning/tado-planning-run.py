@@ -1088,9 +1088,9 @@ def print_config_summary(config_name: str, zone_cfg_map: dict, level: int):
                 PREHEAT_TO_API.get(raw_preheat.lower(), ""), raw_preheat.upper()
             ) if raw_preheat else "(not set → ECO)"
             away_temp   = cfg.get("away_temp")
-            away_en     = cfg.get("away_enabled")
+            away_mode   = "no frost (disabled)" if preheat_str == "OFF" else "enabled"
             log(f"    Preheat      : {preheat_str}", 1)
-            log(f"    Away enabled : {away_en if away_en is not None else '(not set → True)'}", 1)
+            log(f"    Away mode    : {away_mode}", 1)
             log(f"    Away temp    : {f'{away_temp}°C' if away_temp is not None else '(not set → 15°C)'}", 1)
     log("", 1)
 
