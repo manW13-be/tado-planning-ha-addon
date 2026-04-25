@@ -905,10 +905,12 @@ def zone_needs_update(tado: Tado, zone_id: int, zone_cfg: dict, zone_key: str,
             return True
 
     if any(k in zone_cfg for k in ("away_temp", "away_enabled", "preheat")):
-        if "timetable" in zone_cfg and "preheat" in zone_cfg:
+        if zone_cfg.get("away_enabled") is False:
+            preheat_level = "OFF"               # no frost: always OFF regardless of preheat field
+        elif "timetable" in zone_cfg and "preheat" in zone_cfg:
             preheat_level = PREHEAT_TO_API.get(zone_cfg["preheat"].lower(), "ECO")
         else:
-            preheat_level = None  # away-only zone: preserve existing, don't compare
+            preheat_level = None                # away-only zone: preserve existing, don't compare
         away_temp     = float(zone_cfg.get("away_temp", 15.0))
         result      = tado_get(tado, f"zones/{zone_id}/awayConfiguration")
         actual_t    = result.get("minimumAwayTemperature", {}).get("celsius") if isinstance(result, dict) else None
@@ -956,10 +958,12 @@ def apply_zone_config(tado: Tado, zone_id: int, zone_key: str, zone_cfg: dict):
         log(f"[OK]   '{zone_key}' early_start: {zone_cfg['early_start']}", 1)
 
     if any(k in zone_cfg for k in ("away_temp", "away_enabled", "preheat")):
-        if "timetable" in zone_cfg and "preheat" in zone_cfg:
+        if zone_cfg.get("away_enabled") is False:
+            preheat_level = "OFF"               # no frost: always OFF regardless of preheat field
+        elif "timetable" in zone_cfg and "preheat" in zone_cfg:
             preheat_level = PREHEAT_TO_API.get(zone_cfg["preheat"].lower(), "ECO")
         else:
-            preheat_level = None  # away-only zone: preserve existing, don't touch
+            preheat_level = None                # away-only zone: preserve existing, don't touch
         away_temp = zone_cfg.get("away_temp", 15.0)
         # Read existing config to log it and preserve the full temperature structure
         existing = tado_get(tado, f"zones/{zone_id}/awayConfiguration")
