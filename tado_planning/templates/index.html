@@ -2286,9 +2286,9 @@ function _analysisZoneCard(zname, exp, act, prov) {
     else diffRow('Preheat', eP, aP, 'preheat');
   }
 
-  // away_temp
+  // away_temp — effective temp: 5°C when no frost, stored away_temp otherwise
   if ('away_temp' in exp || 'away_temp' in act) {
-    const eT = parseFloat(exp.away_temp);
+    const eT = exp.away_enabled === false ? 5.0 : parseFloat(exp.away_temp);
     const aT = parseFloat(act.away_temp);
     if (!isNaN(eT) && !isNaN(aT) && Math.abs(eT-aT) < 0.05) okRow('Away temp', `${eT}°C`, 'away_temp');
     else diffRow('Away temp', isNaN(eT)?'—':eT+'°C', isNaN(aT)?'—':aT+'°C', 'away_temp');
