@@ -630,7 +630,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text);
 
 <div class="modal-overlay" id="modal-wc-copy-zone">
   <div class="modal">
-    <div class="modal-title">Copy zone from another config</div>
+    <div class="modal-title">Copy zone</div>
     <div class="form-group">
       <label class="form-label">Source config</label>
       <select class="form-select" id="wc-cz-config" onchange="wcCopyZoneConfigChanged()"></select>
@@ -1237,11 +1237,16 @@ function wcConfirmAddZone() {
   renderWcDetail();
 }
 async function wcCopyZone() {
-  const others = Object.keys(state.wc).filter(n => n !== state.wcCurrent);
-  if (!others.length) { toast("No other config to copy from", "err"); return; }
+  const others  = Object.keys(state.wc).filter(n => n !== state.wcCurrent);
+  const configs = state.wcCurrent ? [state.wcCurrent, ...others] : others;
+  if (!configs.length) { toast("No config available", "err"); return; }
   const srcSel  = document.getElementById("wc-cz-config");
   const destSel = document.getElementById("wc-cz-dest");
-  srcSel.innerHTML  = others.map(n => `<option>${n}</option>`).join("");
+  srcSel.innerHTML  = configs.map(n =>
+    n === state.wcCurrent
+      ? `<option value="${n}">${n} (this config)</option>`
+      : `<option>${n}</option>`
+  ).join("");
   destSel.innerHTML = `<option value="">Loading...</option>`;
   document.getElementById("wc-cz-err").textContent = "";
   wcCopyZoneConfigChanged();
@@ -1265,15 +1270,18 @@ async function wcCopyZone() {
 }
 function wcCopyZoneConfigChanged() {
   const src   = document.getElementById("wc-cz-config").value;
-  const zones = state.wc[src] ? Object.keys(state.wc[src]) : [];
+  const zones = src === state.wcCurrent
+    ? Object.keys(state.wcData || {})
+    : (state.wc[src] ? Object.keys(state.wc[src]) : []);
   document.getElementById("wc-cz-zone").innerHTML = zones.map(z => `<option>${z}</option>`).join("");
 }
 function wcConfirmCopyZone() {
-  const src  = document.getElementById("wc-cz-config").value;
-  const zone = document.getElementById("wc-cz-zone").value;
-  const dest = document.getElementById("wc-cz-dest").value.trim() || zone;
+  const src     = document.getElementById("wc-cz-config").value;
+  const zone    = document.getElementById("wc-cz-zone").value;
+  const dest    = document.getElementById("wc-cz-dest").value.trim() || zone;
+  const srcData = src === state.wcCurrent ? state.wcData : state.wc[src];
   const doCopy = () => {
-    state.wcData[dest] = JSON.parse(JSON.stringify(state.wc[src][zone]));
+    state.wcData[dest] = JSON.parse(JSON.stringify(srcData[zone]));
     closeModal("wc-copy-zone");
     renderWcDetail();
   };
