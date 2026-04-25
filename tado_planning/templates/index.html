@@ -121,6 +121,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text);
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .form-hint { font-size: 11.5px; color: var(--muted); margin-top: 4px; }
 .form-section-title { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid var(--border); }
+.form-value { font-size: 13.5px; padding: 8px 0; color: var(--text); }
 .form-error { font-size: 12px; color: var(--red); margin-top: 4px; }
 
 /* ── STATUS CARDS ── */
@@ -2156,27 +2157,37 @@ function _tadoZoneCard(zname, zcfg) {
         </table>
       </div>`).join('');
   }
-  const preheatLabel = zcfg.preheat ? normPreheat(zcfg.preheat) : '—';
-  const earlyLabel   = zcfg.early_start ? 'Start before' : 'Start after';
-  const awayLabel    = zcfg.away_enabled !== false ? 'enabled' : 'disabled';
   return `
   <div class="zone-card" id="tado-z-${zname}">
     <div class="zone-card-header" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'">
       <span class="zone-card-title">${zname}</span>
-      <span style="font-size:12px;color:var(--muted)">${hasTT ? tt : 'Away only'}</span>
+      ${hasTT ? `<span class="badge badge-blue">${tt}</span>` : `<span class="badge badge-gray">away only</span>`}
     </div>
     <div class="zone-card-body">
       ${hasTT ? slotsHtml : ''}
       ${hasTT ? `
-      <div class="divider" style="margin:10px 0 8px"></div>
-      <div class="form-row" style="gap:24px;font-size:13px;margin-bottom:0">
-        <div><div class="form-label">Preheat before arrival</div>${preheatLabel}</div>
-        <div><div class="form-label">Early start</div>${earlyLabel}</div>
+      <div class="form-section-title">Schedule</div>
+      <div class="form-row" style="margin-bottom:16px">
+        <div class="form-group">
+          <label class="form-label">Preheat before arrival</label>
+          <div class="form-value">${normPreheat(zcfg.preheat) || '—'}</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Early start</label>
+          <div class="form-value">${zcfg.early_start ? 'Start before' : 'Start after'}</div>
+        </div>
       </div>` : ''}
-      <div class="divider" style="margin:10px 0 8px"></div>
-      <div class="form-row" style="gap:24px;font-size:13px;margin-bottom:0">
-        <div><div class="form-label">Away mode</div>${awayLabel}</div>
-        ${zcfg.away_enabled !== false ? `<div><div class="form-label">Away temp (°C)</div>${zcfg.away_temp != null ? zcfg.away_temp+'°C' : '—'}</div>` : ''}
+      <div class="form-section-title">Away</div>
+      <div class="form-row" style="margin-bottom:12px">
+        <div class="form-group">
+          <label class="form-label">Away mode</label>
+          <div class="form-value">${zcfg.away_enabled !== false ? 'Away temp' : 'No frost'}</div>
+        </div>
+        ${zcfg.away_enabled !== false ? `
+        <div class="form-group">
+          <label class="form-label">Away temp (°C)</label>
+          <div class="form-value">${zcfg.away_temp != null ? zcfg.away_temp+'°C' : '—'}</div>
+        </div>` : ''}
       </div>
     </div>
   </div>`;
