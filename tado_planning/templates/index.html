@@ -550,6 +550,12 @@ body { font-family: var(--font); background: var(--bg); color: var(--text);
       </div>
     </div>
     <div class="section-body" style="padding:0;display:flex;flex-direction:column;flex:1;min-height:0">
+      <div id="log-auth-banner" style="display:none;padding:8px 20px;font-size:12px;font-weight:600;
+        color:#92400e;background:#fef3c7;border-bottom:1px solid #fcd34d;flex-shrink:0">
+        ⚠ Authentification Tado requise — auto-refresh pausé.
+        <a href="#" onclick="resumeLogsRefresh();return false"
+          style="margin-left:8px;color:#b45309;text-decoration:underline">Reprendre</a>
+      </div>
       <div id="log-meta" style="padding:8px 20px;font-size:11px;color:var(--muted);
         border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0"></div>
       <pre id="log-output" style="flex:1;overflow-y:auto;margin:0;padding:14px 20px;
@@ -671,7 +677,26 @@ const TT_KEYS = {
   "Mon-Fri, Sat, Sun": ["Mon-Fri","Sat","Sun"],
   "Mon, ..., Sun":     ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
 };
-const PREHEAT_OPTS = ["off","ECO","BALANCE","COMFORT"];
+const PREHEAT_OPTS = ["OFF","ECO","BALANCE","COMFORT"];
+
+function fmtDate(v) {
+  if (!v || v === 'unknown') return '—';
+  const d = new Date(v);
+  if (isNaN(d)) return v;
+  const diff = Math.round((Date.now() - d) / 1000);
+  const rel  = diff < 0       ? `in ${Math.abs(diff)}s`
+             : diff < 60      ? `${diff}s ago`
+             : diff < 3600    ? `${Math.floor(diff/60)}min ago`
+             : diff < 86400   ? `${Math.floor(diff/3600)}h ago`
+             : `${Math.floor(diff/86400)}d ago`;
+  return `${d.toLocaleString()} <span style="color:var(--muted);font-size:11px">(${rel})</span>`;
+}
+
+function normPreheat(v) {
+  if (!v) return 'ECO';
+  const m = {off:'OFF',eco:'ECO',équilibre:'BALANCE',balance:'BALANCE',medium:'BALANCE',confort:'COMFORT',comfort:'COMFORT'};
+  return m[v.toLowerCase()] || v.toUpperCase();
+}
 
 let state = {
   wc: {},           // all weekconfigs
@@ -727,6 +752,7 @@ function showSection(id) {
   if (id === "weekconfigs") loadWeekconfigs();
   if (id === "plannings")   loadPlannings();
   if (id === "settings")    loadSettings();
+  if (id === "tado")        loadTadoState();
   if (id === "analysis")    loadAnalysis();
   if (id === "addon")       loadAddon();
   if (id === "logs")        { loadLogs(); _startLogsAutoRefresh(); }
@@ -781,8 +807,8 @@ async function loadStatus() {
       const info = loop.running
         ? `<span style="font-size:13px;font-weight:600;">Loop running</span>
            <span style="font-size:12px;color:var(--muted);">every ${loop.interval_min} min</span>
-           ${loop.last_run ? `<span style="font-size:12px;color:var(--muted);">· last <b>${loop.last_run}</b></span>` : ''}
-           ${loop.next_run ? `<span style="font-size:12px;color:var(--muted);">· next <b>${loop.next_run}</b></span>` : ''}`
+           ${loop.last_run ? `<span style="font-size:12px;color:var(--muted);">· last ${fmtDate(loop.last_run)}</span>` : ''}
+           ${loop.next_run ? `<span style="font-size:12px;color:var(--muted);">· next ${fmtDate(loop.next_run)}</span>` : ''}`
         : `<span style="font-size:13px;color:var(--muted);">Loop not running</span>`;
       html += `<div style="display:flex;align-items:center;justify-content:space-between;
         border:1px solid var(--border);border-radius:var(--radius);padding:10px 16px;
@@ -944,8 +970,8 @@ function normalizeZone(zcfg) {
     if (!("away_temp"    in zcfg)) zcfg.away_temp    = 15;
     if (!("away_enabled" in zcfg)) zcfg.away_enabled = true;
     if (!("preheat"      in zcfg)) zcfg.preheat      = "ECO";
-    // Tado returns "MEDIUM" for Balance; normalize to our canonical "BALANCE"
-    if (zcfg.preheat === "medium" || zcfg.preheat === "MEDIUM") zcfg.preheat = "BALANCE";
+    // Normalize all preheat variants to canonical display values
+    zcfg.preheat = normPreheat(zcfg.preheat);
   }
   if ("timetable" in zcfg && !("early_start" in zcfg)) zcfg.early_start = false;
   return zcfg;
@@ -1104,7 +1130,7 @@ function renderZoneCard(zname, zcfg) {
           <label class="form-label">Preheat before arrival</label>
           <select class="form-select" id="wc-preheat-${zname}"
                   onchange="wcSetMeta('${zname}','preheat',this.value)">
-            ${PREHEAT_OPTS.map(p => `<option${((zcfg.preheat==='medium'?'BALANCE':zcfg.preheat)||'ECO')===p?' selected':''}>${p}</option>`).join("")}
+            ${PREHEAT_OPTS.map(p => `<option${(normPreheat(zcfg.preheat)||'ECO')===p?' selected':''}>${p}</option>`).join("")}
           </select>
         </div>
         <div class="form-group">
@@ -1876,7 +1902,7 @@ function renderDzCard(cfg) {
       <div class="form-group">
         <label class="form-label">Preheat before arrival</label>
         <select class="form-select" onchange="dzSetMeta('preheat',this.value)">
-          ${PREHEAT_OPTS.map(p => `<option${(cfg.preheat||'ECO')===p?' selected':''}>${p}</option>`).join("")}
+          ${PREHEAT_OPTS.map(p => `<option${(normPreheat(cfg.preheat)||'ECO')===p?' selected':''}>${p}</option>`).join("")}
         </select>
       </div>
       <div class="form-group">
@@ -1957,11 +1983,21 @@ async function settingsSave() {
 // LOGS
 // ─────────────────────────────────────────────────────────────────────────
 let _logsAutoRefresh = null;
+let _logAuthPaused   = false;
+
+function resumeLogsRefresh() {
+  _logAuthPaused = false;
+  document.getElementById("log-auth-banner").style.display = "none";
+  document.getElementById("log-autoscroll").checked = true;
+  _startLogsAutoRefresh();
+  loadLogs();
+}
 
 async function loadLogs() {
-  const out  = document.getElementById("log-output");
-  const meta = document.getElementById("log-meta");
-  const lines = document.getElementById("log-lines")?.value || 200;
+  const out    = document.getElementById("log-output");
+  const meta   = document.getElementById("log-meta");
+  const banner = document.getElementById("log-auth-banner");
+  const lines  = document.getElementById("log-lines")?.value || 200;
   try {
     const { data } = await api("GET", `/logs?lines=${lines}`);
     if (!data.has_log && !data.lines?.length) {
@@ -1969,7 +2005,28 @@ async function loadLogs() {
       meta.textContent = "";
       return;
     }
-    // Colorise lines by tag
+
+    // Detect auth state from log lines
+    const hasAuthUrl     = data.lines.some(l => /\[AUTH\] URL: https?:\/\//.test(l));
+    const hasAuthSuccess = data.lines.some(l => /\[AUTH\] Authentication successful/.test(l));
+
+    if (hasAuthUrl && !hasAuthSuccess) {
+      // Auth pending — pause auto-refresh so user can click the link
+      if (!_logAuthPaused) {
+        _logAuthPaused = true;
+        _stopLogsAutoRefresh();
+        document.getElementById("log-autoscroll").checked = false;
+        banner.style.display = "";
+      }
+    } else if (hasAuthSuccess && _logAuthPaused) {
+      // Auth resolved — resume
+      _logAuthPaused = false;
+      banner.style.display = "none";
+      document.getElementById("log-autoscroll").checked = true;
+      _startLogsAutoRefresh();
+    }
+
+    // Render lines with colorisation and URL hyperlinking for [AUTH] URL lines
     out.innerHTML = data.lines.map(line => {
       let color = "";
       if (/\[ERROR\]|\[!\]/.test(line))      color = "color:#f87171";
@@ -1982,14 +2039,22 @@ async function loadLogs() {
       else if (/\[APPLY\]/.test(line))       color = "color:#f59e0b";
       else if (/\[VERIFY\]/.test(line))      color = "color:#f59e0b";
       else if (/\[API\]/.test(line))         color = "color:#94a3b8";
+      // Hyperlink bare [AUTH] URL: lines
+      const urlMatch = line.match(/^\[AUTH\] URL: (https?:\/\/\S+)$/);
+      if (urlMatch) {
+        const href = urlMatch[1].replace(/&/g,"&amp;");
+        const inner = `[AUTH] URL: <a href="${href}" target="_blank"
+          style="color:#c4b5fd;text-decoration:underline;font-weight:bold">${href}</a>`;
+        return `<span style="${color || 'color:#a78bfa'}">${inner}</span>`;
+      }
       const escaped = line.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
       return color ? `<span style="${color}">${escaped}</span>` : escaped;
     }).join("\n");
     const lastApi = data.lines.filter(l => /\[API\] \d+ calls/.test(l)).pop();
     const apiInfo = lastApi ? ' · ' + lastApi.replace(/.*\[API\] /, '') : '';
     meta.textContent = `${data.total} total lines · showing last ${data.lines.length}${apiInfo}`;
-    // Auto-scroll to bottom
-    if (document.getElementById("log-autoscroll")?.checked) {
+    // Auto-scroll to bottom (only if not paused)
+    if (!_logAuthPaused && document.getElementById("log-autoscroll")?.checked) {
       out.scrollTop = out.scrollHeight;
     }
   } catch(e) {
@@ -2048,7 +2113,12 @@ async function loadTadoState() {
   el.innerHTML = `<div class="empty"><div class="empty-icon">⏳</div><div class="empty-text">Reading from Tado…</div></div>`;
   try {
     const { data } = await api("GET", "/tado/zones");
-    if (data.error) { el.innerHTML = `<div class="alert alert-error">${data.error}</div>`; return; }
+    if (data.error) {
+      const isAuth = /timed out|token|auth/i.test(data.error);
+      el.innerHTML = `<div class="alert alert-error">${data.error}${isAuth
+        ? `<div style="margin-top:6px;font-size:12px">⚠ Authentification Tado en attente — ouvrez l'onglet <b>Logs</b> pour valider.</div>` : ''}</div>`;
+      return;
+    }
     const zones = data.zones || {};
     if (!Object.keys(zones).length) {
       el.innerHTML = `<div class="empty"><div class="empty-icon">📡</div><div class="empty-text">No zones returned</div></div>`;
@@ -2086,7 +2156,7 @@ function _tadoZoneCard(zname, zcfg) {
         </table>
       </div>`).join('');
   }
-  const preheatLabel = zcfg.preheat || '—';
+  const preheatLabel = zcfg.preheat ? normPreheat(zcfg.preheat) : '—';
   const earlyLabel   = zcfg.early_start ? 'Start before' : 'Start after';
   const awayLabel    = zcfg.away_enabled !== false ? 'Away temp' : 'No frost';
   return `
@@ -2123,7 +2193,12 @@ async function loadAnalysis() {
       api("GET", "/tado/zones"),
       api("GET", "/simulate"),
     ]);
-    if (tadoRes.data.error) { el.innerHTML = `<div class="alert alert-error">Tado: ${tadoRes.data.error}</div>`; return; }
+    if (tadoRes.data.error) {
+      const isAuth = /timed out|token|auth/i.test(tadoRes.data.error);
+      el.innerHTML = `<div class="alert alert-error">Tado: ${tadoRes.data.error}${isAuth
+        ? `<div style="margin-top:6px;font-size:12px">⚠ Authentification Tado en attente — ouvrez l'onglet <b>Logs</b> pour valider.</div>` : ''}</div>`;
+      return;
+    }
     if (simRes.data.error)  { el.innerHTML = `<div class="alert alert-error">Simulate: ${simRes.data.error}</div>`; return; }
 
     const actual     = tadoRes.data.zones      || {};
@@ -2159,11 +2234,6 @@ function _analysisZoneCard(zname, exp, act, prov) {
   if (!exp) return `<div class="zone-card"><div class="zone-card-header"><span class="zone-card-title">${zname}</span><span style="font-size:12px;color:var(--red)">Not in simulation</span></div></div>`;
   if (!act) return `<div class="zone-card"><div class="zone-card-header"><span class="zone-card-title">${zname}</span><span style="font-size:12px;color:var(--red)">Not found in Tado</span></div></div>`;
 
-  const normPreheat = v => {
-    if (!v) return 'ECO';
-    const m = {off:'OFF',eco:'ECO',équilibre:'BALANCE',balance:'BALANCE',medium:'BALANCE',confort:'COMFORT',comfort:'COMFORT'};
-    return m[v.toLowerCase()] || v.toUpperCase();
-  };
   const provTag = key => {
     const p = prov[key];
     if (!p) return '';
@@ -2309,9 +2379,6 @@ async function loadAddon() {
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:4px">
         <button class="btn btn-primary" onclick="addonRunNow(this)">▶ Run now</button>
         <button class="btn btn-secondary" onclick="addonCheckUpdate(this)" id="btn-check-update">🔍 Check for updates</button>
-        ${data.update_available
-          ? `<button class="btn btn-secondary" onclick="addonUpdate(this)" id="btn-do-update">⬆ Update to ${data.version_latest}</button>`
-          : `<button class="btn btn-secondary" disabled id="btn-do-update" title="No update available">⬆ Update</button>`}
       </div>
       <div style="margin-top:10px;font-size:11px;color:var(--muted)">
         Le Supervisor vérifie les mises à jour automatiquement toutes les ~24h.
