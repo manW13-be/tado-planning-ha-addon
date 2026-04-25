@@ -1,5 +1,7 @@
 # tado-planning
 
+> **Version 1.2.53**
+
 Automated Tado heating schedule management for households with a **shared custody cycle** — and beyond.
 
 ---
@@ -19,6 +21,7 @@ Automated Tado heating schedule management for households with a **shared custod
 - [Data file format](#data-file-format)
 - [Manual runs and testing](#manual-runs-and-testing)
 - [Verbosity levels](#verbosity-levels)
+- [Home Assistant entities](#home-assistant-entities)
 - [Updating](#updating)
 - [Troubleshooting](#troubleshooting)
 - [For developers](#for-developers)
@@ -90,7 +93,7 @@ There are two kinds of plannings:
 
 ### Weekconfigs
 
-A **weekconfig** defines *what* to apply to Tado: temperatures, time slots, timetable type, away mode, preheat — per zone. Only the zones listed in a weekconfig are touched when it is applied.
+A **weekconfig** defines *what* to apply to Tado: temperatures, time events, timetable type, away mode, preheat — per zone. Only the zones listed in a weekconfig are touched when it is applied.
 
 All weekconfigs are stored together in `weekconfigs.json`.
 
@@ -133,7 +136,7 @@ The cleaning lady arrives Tuesday morning. The house is in away mode, but the mi
 - **Tuesday 06:30** → apply `away_18deg` (level 2): raises away temperature on all zones
 - **Tuesday 11:30** → apply `away_15deg` (level 2): resets away temperature
 
-Since `kidspresent` (level 1) and `away_18deg` (level 2) cover the same zones, the level 2 setting is applied on top of the level 1 schedule already set on Tado — without touching time slots or other settings.
+Since `kidspresent` (level 1) and `away_18deg` (level 2) cover the same zones, the level 2 setting is applied on top of the level 1 schedule already set on Tado — without touching time events or other settings.
 
 **Exception planning — exam period:**
 - `preblocus` has `start: "2026-05-01 00:00"`, `end: "2026-05-08 00:00"`, cycle `one-week`
@@ -332,10 +335,13 @@ The web configurator manages all schedule data through a browser UI. It is avail
 | Section | Description |
 |---------|-------------|
 | **Status** | Current resolved configuration per zone and per level, active planning, 14-day timeline |
+| **Weekconfig (actual)** | Live Tado state per zone — timetable type, time events, away and preheat settings. The current day's tab is pre-selected automatically |
+| **Weekconfig (analysis)** | Side-by-side comparison of expected (simulated) vs actual (Tado live) configuration per zone, with L1/L2 provenance per field |
 | **Weekconfigs** | Create, edit, copy, rename, delete zone configuration profiles |
 | **Plannings** | Create, edit, copy, rename, delete plannings (standard + exceptions) |
 | **Settings** | Scheduler loop interval, default zone template for new weekconfigs |
 | **Logs** | Live log viewer with colour-coded entries, auto-refresh, manual clear |
+| **Add-on** | HA only — installed and latest version, check for updates, one-click update, verbosity control, API call counters (GET/PUT) |
 | **Service** | macOS only — install or uninstall the launchd agent from the UI, with live status |
 
 The Status section also has a **▶ Run now** button to trigger the scheduler immediately, whether or not the loop is running.
@@ -438,11 +444,11 @@ Zone names must match your Tado zone names exactly. Run `./scripts/list_zones.sh
 | `Mon-Fri, Sat, Sun` | `Mon-Fri`, `Sat`, `Sun` | Weekdays + Saturday + Sunday |
 | `Mon, ..., Sun` | `Mon`, `Tue`, `Wed`, `Thu`, `Fri`, `Sat`, `Sun` | One schedule per day |
 
-**Zone config fields** (all optional except `timetable` when setting time slots):
+**Zone config fields** (all optional except `timetable` when defining time events):
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `timetable` | string | Timetable type — required if defining time slots |
+| `timetable` | string | Timetable type — required if defining time events |
 | `Mon-Sun` / `Mon-Fri` / etc. | array | Time blocks: `[{ "start": "HH:MM", "temp": N }, ...]` |
 | `away_temp` | number | Minimum temperature in away mode (°C) |
 | `away_enabled` | boolean | Enable or disable Tado away mode |
@@ -469,7 +475,7 @@ A weekconfig that only sets `away_temp` / `away_enabled` (like `away_15deg`) doe
 | Flag | What is shown |
 |------|---------------|
 | *(none)* | ISO week, active planning, active configs, result summary |
-| `-v` | + Weekconfig zone details (slots, away, preheat) |
+| `-v` | + Weekconfig zone details (events, away, preheat) |
 | `-vv` | + Cycle candidates with selection trace and wrap-around info |
 | `-vvv` | + API blocks sent to Tado (start → end : temp) |
 | `-vvvv` | + Raw PUT/GET requests with payload and response |
@@ -479,18 +485,29 @@ For **macOS launchd**: scheduled runs always run at verbosity 0 — use manual r
 
 ---
 
+## Home Assistant entities
+
+After each run, tado-planning pushes the following states to the HA API (HA add-on only):
+
+| Entity | Type | Description |
+|--------|------|-------------|
+| `sensor.tado_planning_last_run` | timestamp | Date/time of the last scheduler run |
+| `sensor.tado_planning_last_put` | timestamp | Date/time of the last write to the Tado API |
+| `sensor.tado_planning_api_get_calls` | number | Cumulative Tado API GET calls since install |
+| `sensor.tado_planning_api_put_calls` | number | Cumulative Tado API PUT calls since install |
+| `sensor.tado_planning_version` | string | Installed add-on version |
+| `sensor.tado_planning_latest_version` | string | Latest available version (when an update is available) |
+| `binary_sensor.tado_planning_update_available` | boolean | `on` when a newer version exists in the store |
+
+These entities can be used in HA dashboards, automations, or alerts.
+
+---
+
 ## Updating
 
 ### Home Assistant
 
-When a new version is available, HA shows an **Update** button on the add-on page. Click it — HA pulls the new version from GitHub and rebuilds the image.
-
-To force an immediate rebuild without waiting for store detection:
-
-```bash
-./scripts/git_fetch.sh
-# rebuild from HA UI or restart the add-on
-```
+Use the **Add-on** tab in the web configurator: click **🔍 Check for updates** to force the store to reload, then **Update** if a new version is available. Alternatively, HA shows an **Update** button on the add-on page automatically when a new version is detected.
 
 ### macOS
 
