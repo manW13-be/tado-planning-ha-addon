@@ -777,21 +777,13 @@ def get_tado_client() -> Tado:
         global _auth_not_validated_logged
         _auth_not_validated_logged = False
         url = tado.device_verification_url()
-        log(f"\n[AUTH] ╔══════════════════════════════════════════════════════╗")
-        log(f"[AUTH] ║         FIRST CONNECTION REQUIRED                   ║")
-        log(f"[AUTH] ╠══════════════════════════════════════════════════════╣")
-        log(f"[AUTH] ║ Open this URL in your browser and log in with Tado: ║")
-        log(f"[AUTH] ║                                                      ║")
-        log(f"[AUTH] ║  {url}")
-        log(f"[AUTH] ║                                                      ║")
-        log(f"[AUTH] ║ The token will be saved automatically.              ║")
-        log(f"[AUTH] ╚══════════════════════════════════════════════════════╝\n")
+        log("[AUTH] Tado token absent, invalid or expired.")
         log(f"[AUTH] URL: {url}")
         try:
             webbrowser.open_new_tab(url)
         except Exception:
             pass
-        log("[AUTH] Waiting for validation...")
+        log(f"[AUTH] Waiting for validation ({datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')})...")
         _retry = 0
         while True:
             try:
