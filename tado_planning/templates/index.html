@@ -967,11 +967,11 @@ async function loadStatus() {
 function normalizeZone(zcfg) {
   const AWAY = ["away_temp", "away_enabled", "preheat"];
   if (AWAY.some(k => k in zcfg)) {
-    if (!("away_temp" in zcfg)) zcfg.away_temp = 15;
-    if (!("preheat"   in zcfg)) zcfg.preheat   = "ECO";
-    // preheat is the single source of truth; away_enabled is always derived
-    zcfg.preheat     = normPreheat(zcfg.preheat);
-    zcfg.away_enabled = zcfg.preheat !== 'OFF';
+    if (!("away_temp"    in zcfg)) zcfg.away_temp    = 15;
+    if (!("away_enabled" in zcfg)) zcfg.away_enabled = true;
+    if (!("preheat"      in zcfg)) zcfg.preheat      = "ECO";
+    zcfg.preheat = normPreheat(zcfg.preheat);
+    // away_enabled and preheat are independent — do not link them
   }
   if ("timetable" in zcfg && !("early_start" in zcfg)) zcfg.early_start = false;
   return zcfg;
@@ -1149,9 +1149,6 @@ function renderZoneCard(zname, zcfg) {
             const _en=this.value==='away_temp';
             wcSetMeta('${zname}','away_enabled',_en);
             document.getElementById('wc-away-temp-${zname}').style.display=_en?'':'none';
-            const _ps=document.getElementById('wc-preheat-${zname}');
-            if(!_en){ wcSetMeta('${zname}','preheat','OFF'); if(_ps)_ps.value='OFF'; }
-            else if(_ps && _ps.value==='OFF'){ wcSetMeta('${zname}','preheat','ECO'); _ps.value='ECO'; }
           ">
             <option value="away_temp"${zcfg.away_enabled!==false?' selected':''}>Away temp</option>
             <option value="no_frost"${zcfg.away_enabled===false?' selected':''}>No frost</option>
@@ -2281,7 +2278,7 @@ function _analysisZoneCard(zname, exp, act, prov) {
     else diffRow('Early start', eE ? 'enabled' : 'disabled', aE ? 'enabled' : 'disabled', 'early_start');
   }
 
-  // preheat — preheat=OFF IS no frost; data guaranteed consistent by normalizeZone
+  // preheat — independent of away_enabled
   if ('preheat' in exp || 'preheat' in act) {
     const eP = normPreheat(exp.preheat);
     const aP = normPreheat(act.preheat);
@@ -2297,10 +2294,10 @@ function _analysisZoneCard(zname, exp, act, prov) {
     else diffRow('Away temp', isNaN(eT)?'—':eT+'°C', isNaN(aT)?'—':aT+'°C', 'away_temp');
   }
 
-  // away_enabled — always derived from preheat, never from stored away_enabled
-  if ('preheat' in exp || 'away_enabled' in act) {
-    const eA = normPreheat(exp.preheat) !== 'OFF';
-    const aA = act.away_enabled ?? true;
+  // away_enabled — independent of preheat (encoded as minimumAwayTemperature=5°C in Tado API)
+  if ('away_enabled' in exp || 'away_enabled' in act) {
+    const eA = exp.away_enabled !== false;
+    const aA = act.away_enabled !== false;
     if (eA === aA) okRow('Away mode', eA ? 'enabled' : 'disabled', 'away_enabled');
     else diffRow('Away mode', eA ? 'enabled' : 'disabled', aA ? 'enabled' : 'disabled', 'away_enabled');
   }
