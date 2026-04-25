@@ -967,14 +967,11 @@ async function loadStatus() {
 function normalizeZone(zcfg) {
   const AWAY = ["away_temp", "away_enabled", "preheat"];
   if (AWAY.some(k => k in zcfg)) {
-    if (!("away_temp"    in zcfg)) zcfg.away_temp    = 15;
-    if (!("away_enabled" in zcfg)) zcfg.away_enabled = true;
-    if (!("preheat"      in zcfg)) zcfg.preheat      = "ECO";
-    // Normalize preheat variants to canonical display values
-    zcfg.preheat = normPreheat(zcfg.preheat);
-    // preheat is the single source of truth: no frost = preheat OFF, always consistent
-    if (zcfg.away_enabled === false) zcfg.preheat = 'OFF';
-    if (zcfg.preheat === 'OFF')      zcfg.away_enabled = false;
+    if (!("away_temp" in zcfg)) zcfg.away_temp = 15;
+    if (!("preheat"   in zcfg)) zcfg.preheat   = "ECO";
+    // preheat is the single source of truth; away_enabled is always derived
+    zcfg.preheat     = normPreheat(zcfg.preheat);
+    zcfg.away_enabled = zcfg.preheat !== 'OFF';
   }
   if ("timetable" in zcfg && !("early_start" in zcfg)) zcfg.early_start = false;
   return zcfg;
@@ -2300,9 +2297,9 @@ function _analysisZoneCard(zname, exp, act, prov) {
     else diffRow('Away temp', isNaN(eT)?'—':eT+'°C', isNaN(aT)?'—':aT+'°C', 'away_temp');
   }
 
-  // away_enabled
-  if ('away_enabled' in exp || 'away_enabled' in act) {
-    const eA = exp.away_enabled ?? true;
+  // away_enabled — always derived from preheat, never from stored away_enabled
+  if ('preheat' in exp || 'away_enabled' in act) {
+    const eA = normPreheat(exp.preheat) !== 'OFF';
     const aA = act.away_enabled ?? true;
     if (eA === aA) okRow('Away mode', eA ? 'enabled' : 'disabled', 'away_enabled');
     else diffRow('Away mode', eA ? 'enabled' : 'disabled', aA ? 'enabled' : 'disabled', 'away_enabled');
