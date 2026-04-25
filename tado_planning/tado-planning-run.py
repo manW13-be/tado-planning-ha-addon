@@ -899,10 +899,7 @@ def zone_needs_update(tado: Tado, zone_id: int, zone_cfg: dict, zone_key: str,
             "balance": "MEDIUM", "équilibre": "MEDIUM", "medium": "MEDIUM",
             "comfort": "COMFORT", "confort": "COMFORT",
         }
-        away_disabled = zone_cfg.get("away_enabled") is False
-        if away_disabled:
-            preheat_level = "OFF"
-        elif "timetable" in zone_cfg and "preheat" in zone_cfg:
+        if "timetable" in zone_cfg and "preheat" in zone_cfg:
             preheat_level = preheat_map.get(zone_cfg["preheat"].lower(), "ECO")
         else:
             preheat_level = None  # away-only zone: preserve existing, don't compare
@@ -958,10 +955,7 @@ def apply_zone_config(tado: Tado, zone_id: int, zone_key: str, zone_cfg: dict):
             "balance": "MEDIUM", "équilibre": "MEDIUM", "medium": "MEDIUM",
             "comfort": "COMFORT", "confort": "COMFORT",
         }
-        away_disabled = zone_cfg.get("away_enabled") is False
-        if away_disabled:
-            preheat_level = "OFF"
-        elif "timetable" in zone_cfg and "preheat" in zone_cfg:
+        if "timetable" in zone_cfg and "preheat" in zone_cfg:
             preheat_level = preheat_map.get(zone_cfg["preheat"].lower(), "ECO")
         else:
             preheat_level = None  # away-only zone: preserve existing, don't touch
