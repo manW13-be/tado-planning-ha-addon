@@ -1079,18 +1079,25 @@ def print_config_summary(config_name: str, zone_cfg_map: dict, level: int):
         log(f"  {zone}:", 1)
         if "timetable" in cfg:
             tt = cfg["timetable"]
-            log(f"    Timetable  : {tt}", 1)
+            log(f"    Timetable    : {tt}", 1)
             for key in TIMETABLE_REQUIRED_KEYS.get(tt, []):
                 if key in cfg:
-                    log(f"    {key:12}: {[(s['start'], s['temp']) for s in cfg[key]]}", 1)
+                    log(f"    {key:12} : {[(s['start'], s['temp']) for s in cfg[key]]}", 1)
         if "early_start" in cfg:
-            log(f"    Early start: {'enabled' if cfg['early_start'] else 'disabled'}", 1)
+            log(f"    Early start  : {'enabled' if cfg['early_start'] else 'disabled'}", 1)
         if any(k in cfg for k in ("away_temp", "away_enabled", "preheat")):
-            def _fmt(val, default, unit=""):
-                return f"{val}{unit}" if val is not None else f"(not set → {default}{unit})"
-            log(f"    Away       : {_fmt(cfg.get('away_temp'), 15.0, '°C')}, "
-                f"preheat={_fmt(cfg.get('preheat'), 'ECO')}, "
-                f"enabled={cfg.get('away_enabled', '(not set → True)')}", 1)
+            _preheat_map = {
+                "off": "OFF", "eco": "ECO",
+                "balance": "BALANCE", "medium": "BALANCE",
+                "comfort": "COMFORT", "confort": "COMFORT",
+            }
+            raw_preheat = cfg.get("preheat")
+            preheat_str = _preheat_map.get(raw_preheat.lower(), raw_preheat.upper()) if raw_preheat else "(not set → ECO)"
+            away_temp   = cfg.get("away_temp")
+            away_en     = cfg.get("away_enabled")
+            log(f"    Preheat      : {preheat_str}", 1)
+            log(f"    Away enabled : {away_en if away_en is not None else '(not set → True)'}", 1)
+            log(f"    Away temp    : {f'{away_temp}°C' if away_temp is not None else '(not set → 15°C)'}", 1)
     log("", 1)
 
 
