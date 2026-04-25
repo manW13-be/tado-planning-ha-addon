@@ -224,9 +224,9 @@ next_run_time() {
     local INTERVAL_SEC="${1:-3600}"
     local NEXT=$(( INTERVAL_SEC - $(date +%s) % INTERVAL_SEC ))
     if [ "$(uname)" = "Darwin" ]; then
-        date -v+${NEXT}S '+%d/%m/%Y %H:%M:%S'
+        date -v+${NEXT}S '+%Y-%m-%dT%H:%M:%S'
     else
-        date -d "+${NEXT} seconds" '+%d/%m/%Y %H:%M:%S'
+        date -d "+${NEXT} seconds" '+%Y-%m-%dT%H:%M:%S'
     fi
 }
 
@@ -316,7 +316,7 @@ write_loop_status() {
   "pid": $$,
   "interval_sec": ${interval_sec},
   "interval_min": $(( interval_sec / 60 )),
-  "last_run": "$(date '+%Y-%m-%d %H:%M:%S')",
+  "last_run": "$(date '+%Y-%m-%dT%H:%M:%S')",
   "next_run": "${next_ts}"
 }
 JSON
