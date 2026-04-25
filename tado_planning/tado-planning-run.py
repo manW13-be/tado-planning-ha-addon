@@ -73,6 +73,7 @@ DATA_DIR   = os.environ.get("TADO_SCHEDULES_DIR", _DEFAULT_DATA_DIR)
 
 PLANNINGS_FILE    = os.path.join(DATA_DIR, "plannings.json")
 WEEKCONFIGS_FILE  = os.path.join(DATA_DIR, "weekconfigs.json")
+STATS_FILE        = os.path.join(DATA_DIR, "api_stats.json")
 
 # ---------------------------------------------------------------------------
 # CONSTANTS
@@ -616,6 +617,17 @@ def select_config_for_level(events: list, level: int, now: datetime.datetime,
 
 _api_stats: dict[str, int] = {"GET": 0, "PUT": 0}
 _last_put_time: list[str]  = []   # list so we can mutate from nested scope
+
+def _load_api_stats():
+    try:
+        with open(STATS_FILE, encoding="utf-8") as _f:
+            _d = json.load(_f)
+            _api_stats["GET"] = int(_d.get("GET", 0))
+            _api_stats["PUT"] = int(_d.get("PUT", 0))
+    except (FileNotFoundError, Exception):
+        pass
+
+_load_api_stats()
 _preheat_unsupported: set  = set() # zones where Tado rejected preheatingLevel
 _auth_not_validated_logged = False  # suppress repeated "not validated yet" lines
 
@@ -646,6 +658,13 @@ def tado_get(tado: Tado, command: str):
 def log_api_stats():
     total = _api_stats["GET"] + _api_stats["PUT"]
     log(f"[API] {total} calls ({_api_stats['GET']} GET, {_api_stats['PUT']} PUT)")
+
+def save_api_stats():
+    try:
+        with open(STATS_FILE, "w", encoding="utf-8") as _f:
+            json.dump(_api_stats, _f)
+    except Exception as _e:
+        log(f"[WARN] Could not save api_stats: {_e}", 1)
 
 
 def push_ha_sensors():
@@ -1360,6 +1379,7 @@ def main():
     log(f"[TADO] Home: '{home_name}'")
 
     apply_merged(tado, zone_merged_map, zone_l1_cfg_name, zone_l2_cfg_name)
+    save_api_stats()
     push_ha_sensors()
 
 
