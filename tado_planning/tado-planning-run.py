@@ -905,9 +905,8 @@ def zone_needs_update(tado: Tado, zone_id: int, zone_cfg: dict, zone_key: str,
             return True
 
     if any(k in zone_cfg for k in ("away_temp", "away_enabled", "preheat")):
-        if zone_cfg.get("away_enabled") is False:
-            preheat_level = "OFF"               # no frost: always OFF regardless of preheat field
-        elif "timetable" in zone_cfg and "preheat" in zone_cfg:
+        if "timetable" in zone_cfg and "preheat" in zone_cfg:
+            # preheat=OFF means no frost; any other value means away enabled at that level
             preheat_level = PREHEAT_TO_API.get(zone_cfg["preheat"].lower(), "ECO")
         else:
             preheat_level = None                # away-only zone: preserve existing, don't compare
@@ -958,9 +957,8 @@ def apply_zone_config(tado: Tado, zone_id: int, zone_key: str, zone_cfg: dict):
         log(f"[OK]   '{zone_key}' early_start: {zone_cfg['early_start']}", 1)
 
     if any(k in zone_cfg for k in ("away_temp", "away_enabled", "preheat")):
-        if zone_cfg.get("away_enabled") is False:
-            preheat_level = "OFF"               # no frost: always OFF regardless of preheat field
-        elif "timetable" in zone_cfg and "preheat" in zone_cfg:
+        if "timetable" in zone_cfg and "preheat" in zone_cfg:
+            # preheat=OFF means no frost; any other value means away enabled at that level
             preheat_level = PREHEAT_TO_API.get(zone_cfg["preheat"].lower(), "ECO")
         else:
             preheat_level = None                # away-only zone: preserve existing, don't touch

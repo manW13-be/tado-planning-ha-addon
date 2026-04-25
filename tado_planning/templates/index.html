@@ -970,8 +970,11 @@ function normalizeZone(zcfg) {
     if (!("away_temp"    in zcfg)) zcfg.away_temp    = 15;
     if (!("away_enabled" in zcfg)) zcfg.away_enabled = true;
     if (!("preheat"      in zcfg)) zcfg.preheat      = "ECO";
-    // Normalize all preheat variants to canonical display values
+    // Normalize preheat variants to canonical display values
     zcfg.preheat = normPreheat(zcfg.preheat);
+    // preheat is the single source of truth: no frost = preheat OFF, always consistent
+    if (zcfg.away_enabled === false) zcfg.preheat = 'OFF';
+    if (zcfg.preheat === 'OFF')      zcfg.away_enabled = false;
   }
   if ("timetable" in zcfg && !("early_start" in zcfg)) zcfg.early_start = false;
   return zcfg;
@@ -1149,6 +1152,9 @@ function renderZoneCard(zname, zcfg) {
             const _en=this.value==='away_temp';
             wcSetMeta('${zname}','away_enabled',_en);
             document.getElementById('wc-away-temp-${zname}').style.display=_en?'':'none';
+            const _ps=document.getElementById('wc-preheat-${zname}');
+            if(!_en){ wcSetMeta('${zname}','preheat','OFF'); if(_ps)_ps.value='OFF'; }
+            else if(_ps && _ps.value==='OFF'){ wcSetMeta('${zname}','preheat','ECO'); _ps.value='ECO'; }
           ">
             <option value="away_temp"${zcfg.away_enabled!==false?' selected':''}>Away temp</option>
             <option value="no_frost"${zcfg.away_enabled===false?' selected':''}>No frost</option>
@@ -2278,9 +2284,9 @@ function _analysisZoneCard(zname, exp, act, prov) {
     else diffRow('Early start', eE ? 'enabled' : 'disabled', aE ? 'enabled' : 'disabled', 'early_start');
   }
 
-  // preheat — away_enabled=false always means OFF (no frost)
+  // preheat — preheat=OFF IS no frost; data guaranteed consistent by normalizeZone
   if ('preheat' in exp || 'preheat' in act) {
-    const eP = (exp.away_enabled === false) ? 'OFF' : normPreheat(exp.preheat);
+    const eP = normPreheat(exp.preheat);
     const aP = normPreheat(act.preheat);
     if (eP === aP) okRow('Preheat', eP, 'preheat');
     else diffRow('Preheat', eP, aP, 'preheat');
