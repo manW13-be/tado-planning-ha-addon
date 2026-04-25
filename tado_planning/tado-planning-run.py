@@ -120,6 +120,17 @@ DAY_NAMES_EN = {
 
 VALID_CYCLES = ("one-week", "two-weeks-iso", "two-weeks-seq")
 
+# Preheat: user/config values → Tado API values (MEDIUM = Balance in Tado's API)
+PREHEAT_TO_API: dict[str, str] = {
+    "off": "OFF", "eco": "ECO",
+    "balance": "MEDIUM", "équilibre": "MEDIUM", "medium": "MEDIUM",
+    "comfort": "COMFORT", "confort": "COMFORT",
+}
+# Tado API values → canonical display labels used in UI and logs
+PREHEAT_TO_DISPLAY: dict[str, str] = {
+    "OFF": "OFF", "ECO": "ECO", "MEDIUM": "BALANCE", "COMFORT": "COMFORT",
+}
+
 VERBOSITY = 0
 
 
@@ -894,13 +905,8 @@ def zone_needs_update(tado: Tado, zone_id: int, zone_cfg: dict, zone_key: str,
             return True
 
     if any(k in zone_cfg for k in ("away_temp", "away_enabled", "preheat")):
-        preheat_map = {
-            "off": "OFF", "eco": "ECO",
-            "balance": "MEDIUM", "équilibre": "MEDIUM", "medium": "MEDIUM",
-            "comfort": "COMFORT", "confort": "COMFORT",
-        }
         if "timetable" in zone_cfg and "preheat" in zone_cfg:
-            preheat_level = preheat_map.get(zone_cfg["preheat"].lower(), "ECO")
+            preheat_level = PREHEAT_TO_API.get(zone_cfg["preheat"].lower(), "ECO")
         else:
             preheat_level = None  # away-only zone: preserve existing, don't compare
         away_temp     = float(zone_cfg.get("away_temp", 15.0))
@@ -950,13 +956,8 @@ def apply_zone_config(tado: Tado, zone_id: int, zone_key: str, zone_cfg: dict):
         log(f"[OK]   '{zone_key}' early_start: {zone_cfg['early_start']}", 1)
 
     if any(k in zone_cfg for k in ("away_temp", "away_enabled", "preheat")):
-        preheat_map = {
-            "off": "OFF", "eco": "ECO",
-            "balance": "MEDIUM", "équilibre": "MEDIUM", "medium": "MEDIUM",
-            "comfort": "COMFORT", "confort": "COMFORT",
-        }
         if "timetable" in zone_cfg and "preheat" in zone_cfg:
-            preheat_level = preheat_map.get(zone_cfg["preheat"].lower(), "ECO")
+            preheat_level = PREHEAT_TO_API.get(zone_cfg["preheat"].lower(), "ECO")
         else:
             preheat_level = None  # away-only zone: preserve existing, don't touch
         away_temp = zone_cfg.get("away_temp", 15.0)
@@ -1080,13 +1081,10 @@ def print_config_summary(config_name: str, zone_cfg_map: dict, level: int):
         if "early_start" in cfg:
             log(f"    Early start  : {'enabled' if cfg['early_start'] else 'disabled'}", 1)
         if any(k in cfg for k in ("away_temp", "away_enabled", "preheat")):
-            _preheat_map = {
-                "off": "OFF", "eco": "ECO",
-                "balance": "BALANCE", "medium": "BALANCE",
-                "comfort": "COMFORT", "confort": "COMFORT",
-            }
             raw_preheat = cfg.get("preheat")
-            preheat_str = _preheat_map.get(raw_preheat.lower(), raw_preheat.upper()) if raw_preheat else "(not set → ECO)"
+            preheat_str = PREHEAT_TO_DISPLAY.get(
+                PREHEAT_TO_API.get(raw_preheat.lower(), ""), raw_preheat.upper()
+            ) if raw_preheat else "(not set → ECO)"
             away_temp   = cfg.get("away_temp")
             away_en     = cfg.get("away_enabled")
             log(f"    Preheat      : {preheat_str}", 1)
@@ -1111,8 +1109,6 @@ def cmd_tado_zones():
         "Mon-Fri, Sat, Sun": ["Mon-Fri", "Sat", "Sun"],
         "Mon, ..., Sun":     ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
     }
-    _PREHEAT_REVERSE = {"OFF": "off", "ECO": "ECO", "MEDIUM": "BALANCE", "COMFORT": "COMFORT"}
-
     tado      = get_tado_client()
     all_zones = tado.get_zones()
     result    = {}
@@ -1143,7 +1139,7 @@ def cmd_tado_zones():
             if isinstance(away, dict):
                 pl  = away.get("preheatingLevel", "ECO")
                 mat = away.get("minimumAwayTemperature")
-                zcfg["preheat"]      = _PREHEAT_REVERSE.get(pl, (pl or "ECO").lower())
+                zcfg["preheat"]      = PREHEAT_TO_DISPLAY.get(pl, (pl or "ECO"))
                 zcfg["away_temp"]    = mat.get("celsius") if isinstance(mat, dict) else None
                 zcfg["away_enabled"] = pl != "OFF"
             result[zname] = zcfg
