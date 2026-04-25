@@ -1096,7 +1096,7 @@ function renderZoneCard(zname, zcfg) {
             <td><button class="slot-del" onclick="wcDelSlot('${zname}','${k}',${si})">✕</button></td>
           </tr>`).join("")}
         </table>
-        <button class="btn btn-secondary btn-sm" style="margin-top:6px" onclick="wcAddSlot('${zname}','${k}')">+ Slot</button>
+        <button class="btn btn-secondary btn-sm" style="margin-top:6px" onclick="wcAddSlot('${zname}','${k}')">+ Event</button>
       </div>`).join("");
     slotsHtml = tabBtns + slotPanes;
   }
@@ -1881,7 +1881,7 @@ function renderDzCard(cfg) {
             <td><button class="slot-del" onclick="dzDelSlot('${k}',${si})">✕</button></td>
           </tr>`).join("")}
         </table>
-        <button class="btn btn-secondary btn-sm" style="margin-top:6px" onclick="dzAddSlot('${k}')">+ Slot</button>
+        <button class="btn btn-secondary btn-sm" style="margin-top:6px" onclick="dzAddSlot('${k}')">+ Event</button>
       </div>`).join("");
     slotsHtml = tabBtns + slotPanes;
   }
@@ -2136,18 +2136,26 @@ async function loadTadoState() {
   }
 }
 
+function _ttTodayIdx(tt) {
+  const dow = new Date().getDay(); // 0=Sun … 6=Sat
+  if (tt === "Mon, ..., Sun")     return [6,0,1,2,3,4,5][dow];
+  if (tt === "Mon-Fri, Sat, Sun") return dow === 0 ? 2 : dow === 6 ? 1 : 0;
+  return 0;
+}
+
 function _tadoZoneCard(zname, zcfg) {
   const hasTT = !!zcfg.timetable;
   const tt    = zcfg.timetable || '';
   const keys  = TT_KEYS[tt] || [];
   let slotsHtml = '';
   if (hasTT) {
+    const activeIdx = keys.length > 1 ? _ttTodayIdx(tt) : 0;
     const tabBtns = keys.length > 1
       ? `<div class="tt-tabs">${keys.map((k,i) =>
-          `<button class="tt-tab${i===0?' active':''}" onclick="(function(k,btn){document.querySelectorAll('#tado-z-${zname} .tt-pane').forEach(p=>p.style.display='none');document.getElementById('tado-z-${zname}-'+k).style.display='';document.querySelectorAll('#tado-z-${zname} .tt-tab').forEach(b=>b.classList.remove('active'));btn.classList.add('active')})('${k}',this)">${k}</button>`
+          `<button class="tt-tab${i===activeIdx?' active':''}" onclick="(function(k,btn){document.querySelectorAll('#tado-z-${zname} .tt-pane').forEach(p=>p.style.display='none');document.getElementById('tado-z-${zname}-'+k).style.display='';document.querySelectorAll('#tado-z-${zname} .tt-tab').forEach(b=>b.classList.remove('active'));btn.classList.add('active')})('${k}',this)">${k}</button>`
         ).join('')}</div>` : '';
     slotsHtml = tabBtns + keys.map((k,i) => `
-      <div class="tt-pane" id="tado-z-${zname}-${k}" style="${i>0?'display:none':''}">
+      <div class="tt-pane" id="tado-z-${zname}-${k}" style="${i!==activeIdx?'display:none':''}">
         <table class="slots-table" style="table-layout:fixed">
           <tr>
             <th style="padding-left:0;width:50%">Start</th>
@@ -2277,7 +2285,7 @@ function _analysisZoneCard(zname, exp, act, prov) {
     const aS = norm(act[k]);
     const match = eS.length===aS.length && eS.every((s,i)=>s.start===aS[i].start && Math.abs(s.temp-aS[i].temp)<0.05);
     if (match) {
-      okRow(k, `${eS.length} slot${eS.length!==1?'s':''}`, k);
+      okRow(k, `${eS.length} event${eS.length!==1?'s':''}`, k);
     } else {
       const fmt = ss => ss.length ? ss.map(s=>`${s.start}→${s.temp}°C`).join(', ') : '(none)';
       diffRow(k, fmt(eS), fmt(aS), k);
