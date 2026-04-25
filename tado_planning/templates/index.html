@@ -439,6 +439,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text);
               <div id="wcNameErr" style="font-size:12px;color:var(--red)"></div>
             </div>
             <div style="display:flex;gap:6px">
+              <button class="btn btn-secondary btn-sm" onclick="wcMultiCopyZones()">++ Copy zones</button>
               <button class="btn btn-secondary btn-sm" onclick="wcCopyZone()">+ Copy zone</button>
               <button class="btn btn-secondary btn-sm" onclick="wcAddZone()">+ Zone</button>
               <button class="btn btn-danger btn-sm" id="wcDeleteBtn" onclick="wcDelete()">Delete</button>
@@ -624,6 +625,24 @@ body { font-family: var(--font); background: var(--bg); color: var(--text);
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal('wc-add-zone')">Cancel</button>
       <button class="btn btn-primary" onclick="wcConfirmAddZone()">Add</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-wc-multi-copy">
+  <div class="modal" style="max-width:min(960px,95vw);width:95vw">
+    <div class="modal-title">++ Copy zones</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">
+      Cliquez sur une cellule pour sélectionner la source. Chaque zone ne peut venir que d'une seule config.
+    </div>
+    <div style="overflow-x:auto;border:1px solid var(--border);border-radius:6px">
+      <table id="wc-mcz-table" style="border-collapse:collapse;min-width:100%;font-size:12px">
+      </table>
+    </div>
+    <div class="form-error" id="wc-mcz-err" style="margin-top:8px"></div>
+    <div class="modal-actions" style="margin-top:16px">
+      <button class="btn btn-secondary" onclick="closeModal('wc-multi-copy')">Cancel</button>
+      <button class="btn btn-primary" onclick="wcConfirmMultiCopy()">Copier la sélection</button>
     </div>
   </div>
 </div>
@@ -1265,7 +1284,15 @@ async function wcCopyZone() {
         missing.map(n => `<option value="${n}">${n}</option>`).join("");
     }
   } catch(e) {
-    destSel.innerHTML = `<option value="">Could not load zones</option>`;
+    // Tado API unreachable — fall back to zones from the source config not already in current
+    const src = document.getElementById("wc-cz-config").value;
+    const srcZones = src === state.wcCurrent
+      ? Object.keys(state.wcData || {})
+      : (state.wc[src] ? Object.keys(state.wc[src]) : []);
+    const existing = new Set(Object.keys(state.wcData || {}));
+    const fallback = srcZones.filter(z => !existing.has(z)).sort();
+    destSel.innerHTML = `<option value="">— same as source —</option>` +
+      fallback.map(n => `<option value="${n}">${n}</option>`).join("");
   }
 }
 function wcCopyZoneConfigChanged() {
@@ -1287,6 +1314,104 @@ function wcConfirmCopyZone() {
   };
   if (state.wcData[dest]) {
     confirm("Overwrite zone", `Zone '${dest}' already exists. Overwrite?`, doCopy);
+  } else {
+    doCopy();
+  }
+}
+
+function wcMultiCopyZones() {
+  // Toutes les configs SAUF la config courante (la destination)
+  const configs = Object.keys(state.wc).filter(n => n !== state.wcCurrent);
+  if (!configs.length) { toast("Aucune autre config disponible", "err"); return; }
+
+  // Union de toutes les zones présentes dans les configs sources
+  const allZones = new Set();
+  configs.forEach(cfg => Object.keys(state.wc[cfg]).forEach(z => allZones.add(z)));
+  const zoneList = [...allZones].sort();
+
+  if (!zoneList.length) { toast("Aucune zone dans les configs sources", "err"); return; }
+
+  // Sélections : { zoneName: configName | null }
+  window._mczSel = {};
+  zoneList.forEach(z => window._mczSel[z] = null);
+
+  // Construction du tableau
+  // En-tête : noms des configs
+  let th = '<thead><tr>'
+    + '<th style="text-align:left;padding:7px 12px;background:var(--bg);border-bottom:2px solid var(--border);font-weight:600;white-space:nowrap;position:sticky;left:0;z-index:1">Zone</th>';
+  configs.forEach(cfg => {
+    th += `<th style="text-align:center;padding:7px 10px;background:var(--bg);border-bottom:2px solid var(--border);font-weight:600;white-space:nowrap;min-width:90px">${cfg}</th>`;
+  });
+  th += '</tr></thead>';
+
+  // Lignes : une par zone
+  let tb = '<tbody>';
+  zoneList.forEach((zone, i) => {
+    const exists = state.wcData && state.wcData[zone];
+    const rowBg  = i % 2 === 0 ? '' : 'background:#fafafa';
+    tb += `<tr id="wc-mcz-row-${zone}">`;
+    tb += `<td style="padding:5px 12px;white-space:nowrap;font-weight:500;${rowBg};position:sticky;left:0;background:${i%2===0?'#fff':'#fafafa'};border-right:1px solid var(--border)">`;
+    tb += zone;
+    if (exists) tb += ` <span style="font-size:10px;color:var(--muted)">(existe)</span>`;
+    tb += '</td>';
+
+    configs.forEach(cfg => {
+      const hasZone = state.wc[cfg] && state.wc[cfg][zone];
+      if (hasZone) {
+        tb += `<td style="text-align:center;padding:4px 6px;${rowBg}">
+          <button class="wc-mcz-cell btn btn-sm"
+                  data-zone="${zone}" data-cfg="${cfg}"
+                  onclick="wcMczToggle('${zone}','${cfg}')"
+                  style="width:36px;height:28px;padding:0;border:1px solid var(--border);border-radius:4px;background:var(--bg);cursor:pointer;font-size:15px;line-height:1">·</button>
+        </td>`;
+      } else {
+        tb += `<td style="text-align:center;padding:4px 6px;color:var(--border);${rowBg}">—</td>`;
+      }
+    });
+    tb += '</tr>';
+  });
+  tb += '</tbody>';
+
+  document.getElementById("wc-mcz-table").innerHTML = th + tb;
+  document.getElementById("wc-mcz-err").textContent = "";
+  openModal("wc-multi-copy");
+}
+
+function wcMczToggle(zone, cfg) {
+  const prev = window._mczSel[zone];
+  window._mczSel[zone] = (prev === cfg) ? null : cfg;
+
+  // Met à jour visuellement toute la ligne
+  document.querySelectorAll(`.wc-mcz-cell[data-zone="${zone}"]`).forEach(btn => {
+    const sel = btn.dataset.cfg === window._mczSel[zone];
+    btn.style.background   = sel ? 'var(--accent)'   : 'var(--bg)';
+    btn.style.color        = sel ? '#fff'             : 'var(--text)';
+    btn.style.borderColor  = sel ? 'var(--accent)'   : 'var(--border)';
+    btn.textContent        = sel ? '✓' : '·';
+  });
+}
+
+function wcConfirmMultiCopy() {
+  const toCopy = Object.entries(window._mczSel).filter(([, cfg]) => cfg !== null);
+  if (!toCopy.length) {
+    document.getElementById("wc-mcz-err").textContent = "Aucune zone sélectionnée.";
+    return;
+  }
+
+  const overwrites = toCopy.filter(([z]) => state.wcData && state.wcData[z]);
+
+  const doCopy = () => {
+    toCopy.forEach(([zone, cfg]) => {
+      state.wcData[zone] = JSON.parse(JSON.stringify(state.wc[cfg][zone]));
+    });
+    closeModal("wc-multi-copy");
+    renderWcDetail();
+    toast(`${toCopy.length} zone(s) copiée(s)`, '');
+  };
+
+  if (overwrites.length) {
+    const names = overwrites.map(([z]) => z).join(", ");
+    confirm("Écraser des zones", `${overwrites.length} zone(s) existent déjà : ${names}. Écraser ?`, doCopy);
   } else {
     doCopy();
   }
@@ -1802,9 +1927,10 @@ function openModal(id) {
   document.getElementById("modal-" + id).classList.add("open");
 }
 
-// Close modal on overlay click
+// Close modal on overlay click — mousedown avoids false triggers from native <select> dropdowns
+// that extend beyond the modal boundary and dispatch a synthetic click on the overlay.
 document.querySelectorAll(".modal-overlay").forEach(el => {
-  el.addEventListener("click", e => {
+  el.addEventListener("mousedown", e => {
     if (e.target === el) el.classList.remove("open");
   });
 });
