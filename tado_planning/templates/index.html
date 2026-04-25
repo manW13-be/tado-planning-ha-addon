@@ -2278,9 +2278,9 @@ function _analysisZoneCard(zname, exp, act, prov) {
     else diffRow('Early start', eE ? 'enabled' : 'disabled', aE ? 'enabled' : 'disabled', 'early_start');
   }
 
-  // preheat — away_enabled:false forces OFF regardless of preheat field
+  // preheat — independent of away_enabled
   if ('preheat' in exp || 'preheat' in act) {
-    const eP = (exp.away_enabled === false) ? 'OFF' : normPreheat(exp.preheat);
+    const eP = normPreheat(exp.preheat);
     const aP = normPreheat(act.preheat);
     if (eP === aP) okRow('Preheat', eP, 'preheat');
     else diffRow('Preheat', eP, aP, 'preheat');
