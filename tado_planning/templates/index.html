@@ -2158,7 +2158,7 @@ function _tadoZoneCard(zname, zcfg) {
   }
   const preheatLabel = zcfg.preheat ? normPreheat(zcfg.preheat) : '—';
   const earlyLabel   = zcfg.early_start ? 'Start before' : 'Start after';
-  const awayLabel    = zcfg.away_enabled !== false ? 'Away temp' : 'No frost';
+  const awayLabel    = zcfg.away_enabled !== false ? 'enabled' : 'disabled';
   return `
   <div class="zone-card" id="tado-z-${zname}">
     <div class="zone-card-header" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'">
@@ -2176,7 +2176,7 @@ function _tadoZoneCard(zname, zcfg) {
       <div class="divider" style="margin:10px 0 8px"></div>
       <div class="form-row" style="gap:24px;font-size:13px;margin-bottom:0">
         <div><div class="form-label">Away mode</div>${awayLabel}</div>
-        ${zcfg.away_enabled !== false ? `<div><div class="form-label">Away temp</div>${zcfg.away_temp != null ? zcfg.away_temp+'°C' : '—'}</div>` : ''}
+        ${zcfg.away_enabled !== false ? `<div><div class="form-label">Away temp (°C)</div>${zcfg.away_temp != null ? zcfg.away_temp+'°C' : '—'}</div>` : ''}
       </div>
     </div>
   </div>`;
@@ -2278,9 +2278,9 @@ function _analysisZoneCard(zname, exp, act, prov) {
     else diffRow('Early start', eE ? 'enabled' : 'disabled', aE ? 'enabled' : 'disabled', 'early_start');
   }
 
-  // preheat — independent of away_enabled
+  // preheat — away_enabled=false always means OFF (no frost)
   if ('preheat' in exp || 'preheat' in act) {
-    const eP = normPreheat(exp.preheat);
+    const eP = (exp.away_enabled === false) ? 'OFF' : normPreheat(exp.preheat);
     const aP = normPreheat(act.preheat);
     if (eP === aP) okRow('Preheat', eP, 'preheat');
     else diffRow('Preheat', eP, aP, 'preheat');
