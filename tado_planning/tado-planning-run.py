@@ -74,6 +74,18 @@ DATA_DIR   = os.environ.get("TADO_SCHEDULES_DIR", _DEFAULT_DATA_DIR)
 PLANNINGS_FILE    = os.path.join(DATA_DIR, "plannings.json")
 WEEKCONFIGS_FILE  = os.path.join(DATA_DIR, "weekconfigs.json")
 STATS_FILE        = os.path.join(DATA_DIR, "api_stats.json")
+AUTH_STATUS_FILE  = os.path.join(DATA_DIR, "auth_status.json")
+
+if platform.system() == "Darwin":
+    _DEFAULT_CREDS_FILE = os.path.join(_SCRIPT_DIR, "..", "tado_credentials.json")
+else:
+    _DEFAULT_CREDS_FILE = "/config/tado-planning/tado_credentials.json"
+CREDS_FILE = os.environ.get("TADO_CREDS_FILE", os.path.abspath(_DEFAULT_CREDS_FILE))
+
+# PyTado device-flow client_id — stored in tado_credentials.json (gitignored).
+# Fallback is PyTado's own default; kept here only so the URL-fix below works
+# even if the credentials file is absent.
+_TADO_DEFAULT_CLIENT_ID = "1bb50063-6b0c-4d11-bd99-387f4a91cc46"
 
 # ---------------------------------------------------------------------------
 # CONSTANTS
@@ -643,6 +655,64 @@ _preheat_unsupported: set  = set() # zones where Tado rejected preheatingLevel
 _auth_not_validated_logged = False  # suppress repeated "not validated yet" lines
 
 
+def load_credentials() -> str:
+    """Return client_id from tado_credentials.json, or PyTado's built-in default."""
+    try:
+        with open(CREDS_FILE, encoding="utf-8") as f:
+            data = json.load(f)
+        cid = str(data.get("client_id", "")).strip()
+        return cid if cid else _TADO_DEFAULT_CLIENT_ID
+    except FileNotFoundError:
+        return _TADO_DEFAULT_CLIENT_ID
+    except Exception as e:
+        log(f"[AUTH] Could not read credentials file: {e}")
+        return _TADO_DEFAULT_CLIENT_ID
+
+
+def _write_auth_status(url: str):
+    try:
+        os.makedirs(os.path.dirname(AUTH_STATUS_FILE), exist_ok=True)
+        with open(AUTH_STATUS_FILE, "w", encoding="utf-8") as f:
+            json.dump({
+                "auth_required": True,
+                "url": url,
+                "since": datetime.datetime.now().isoformat(),
+            }, f)
+    except Exception:
+        pass
+
+
+def _clear_auth_status():
+    try:
+        if os.path.exists(AUTH_STATUS_FILE):
+            os.remove(AUTH_STATUS_FILE)
+    except Exception:
+        pass
+
+
+def _push_ha_auth_sensor(pending: bool, url: str = ""):
+    token = os.environ.get("SUPERVISOR_TOKEN")
+    if not token:
+        return
+    try:
+        import requests as _req
+        attrs = {
+            "friendly_name": "Tado Planning — authentification requise",
+            "device_class": "problem",
+            "icon": "mdi:lock-alert",
+        }
+        if pending and url:
+            attrs["auth_url"] = url
+        _req.post(
+            "http://supervisor/core/api/states/binary_sensor.tado_planning_auth_required",
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            json={"state": "on" if pending else "off", "attributes": attrs},
+            timeout=5,
+        )
+    except Exception:
+        pass
+
+
 def tado_put(tado: Tado, command: str, payload):
     _api_stats["PUT"] += 1
     _last_put_time[:] = [datetime.datetime.now().astimezone().isoformat()]
@@ -729,6 +799,11 @@ def push_ha_sensors():
             "attributes": {"friendly_name": "Tado Planning — update disponible",
                            "device_class": "update"},
         }),
+        ("binary_sensor.tado_planning_auth_required", {
+            "state": "off",
+            "attributes": {"friendly_name": "Tado Planning — authentification requise",
+                           "device_class": "problem", "icon": "mdi:lock-alert"},
+        }),
     ]
     if latest_v:
         sensors.append(("sensor.tado_planning_latest_version", {
@@ -757,6 +832,15 @@ def push_ha_sensors():
 # ---------------------------------------------------------------------------
 
 def get_tado_client() -> Tado:
+    # Patch PyTado's client_id with the value from tado_credentials.json so
+    # every OAuth call (device auth, token refresh, URL construction) uses it.
+    client_id = load_credentials()
+    try:
+        import PyTado.const as _pytado_const
+        _pytado_const.CLIENT_ID_DEVICE = client_id
+    except Exception:
+        pass
+
     tado   = Tado(token_file_path=TOKEN_FILE)
     status = tado.device_activation_status()
 
@@ -788,8 +872,21 @@ def get_tado_client() -> Tado:
         global _auth_not_validated_logged
         _auth_not_validated_logged = False
         url = tado.device_verification_url()
+
+        # PyTado ≤0.19.2 omits client_id from the verification URL, causing
+        # Tado's auth server to reject it with missing_client_id.
+        if url and "client_id" not in url:
+            sep = "&" if "?" in url else "?"
+            url = url + sep + f"client_id={client_id}"
+            try:
+                tado._http._device_verification_url = url
+            except Exception:
+                pass
+
         log("[AUTH] Tado token absent, invalid or expired.")
         log(f"[AUTH] URL: {url}")
+        _write_auth_status(url)
+        _push_ha_auth_sensor(True, url)
         try:
             webbrowser.open_new_tab(url)
         except Exception:
@@ -807,9 +904,11 @@ def get_tado_client() -> Tado:
                 _retry += 1
                 if _retry % 6 == 0:  # repeat URL every ~60s
                     log(f"[AUTH] URL: {url}")
+                    _push_ha_auth_sensor(True, url)
                 time.sleep(10)
                 tado = Tado(token_file_path=TOKEN_FILE)
 
+    _clear_auth_status()
     log("[AUTH] Authentication successful.")
     return tado
 
