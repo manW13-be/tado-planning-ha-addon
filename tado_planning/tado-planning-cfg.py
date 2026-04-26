@@ -51,6 +51,15 @@ LOOP_STATUS_FILE  = os.path.join(DATA_DIR, "loop_status.json")
 LOOP_TRIGGER_FILE = os.path.join(DATA_DIR, "loop_trigger")
 LOG_FILE          = os.path.join(DATA_DIR, "tado-planning.log")
 LOG_FILE_PREV     = os.path.join(DATA_DIR, "tado-planning.log.1")
+AUTH_STATUS_FILE  = os.path.join(DATA_DIR, "auth_status.json")
+
+if platform.system() == "Darwin":
+    _DEFAULT_CREDS_FILE = os.path.join(_SCRIPT_DIR, "..", "tado_credentials.json")
+else:
+    _DEFAULT_CREDS_FILE = "/config/tado-planning/tado_credentials.json"
+CREDS_FILE = os.environ.get("TADO_CREDS_FILE", os.path.abspath(_DEFAULT_CREDS_FILE))
+
+_TADO_DEFAULT_CLIENT_ID = "1bb50063-6b0c-4d11-bd99-387f4a91cc46"
 
 # Script / project paths
 _SCRIPT_DIR     = os.path.dirname(os.path.abspath(__file__))
@@ -120,12 +129,23 @@ def save_settings(data: dict):
 _tado_client = None
 
 
+def _load_client_id() -> str:
+    try:
+        with open(CREDS_FILE, encoding="utf-8") as f:
+            cid = str(json.load(f).get("client_id", "")).strip()
+        return cid if cid else _TADO_DEFAULT_CLIENT_ID
+    except Exception:
+        return _TADO_DEFAULT_CLIENT_ID
+
+
 def get_tado_client():
     global _tado_client
     if _tado_client is not None:
         return _tado_client
     try:
         from PyTado.interface.interface import Tado
+        import PyTado.const as _pytado_const
+        _pytado_const.CLIENT_ID_DEVICE = _load_client_id()
         _tado_client = Tado(token_file_path=TOKEN_FILE)
         return _tado_client
     except Exception as e:
@@ -457,12 +477,23 @@ def get_status() -> dict:
                     "l2": {"config": l2_cfg, "planning": l2_pl} if l2_cfg else None,
                 }
 
+        auth_info = {}
+        try:
+            if os.path.exists(AUTH_STATUS_FILE):
+                with open(AUTH_STATUS_FILE, encoding="utf-8") as fa:
+                    auth_info = json.load(fa)
+        except Exception:
+            pass
+
         return {
-            "now":      now.strftime("%A %d/%m/%Y %H:%M"),
-            "iso_week": iso_week,
-            "parity":   parity,
-            "plannings": planning_status,
-            "zones":    zones_status,
+            "now":          now.strftime("%A %d/%m/%Y %H:%M"),
+            "iso_week":     iso_week,
+            "parity":       parity,
+            "plannings":    planning_status,
+            "zones":        zones_status,
+            "auth_required": auth_info.get("auth_required", False),
+            "auth_url":      auth_info.get("url"),
+            "auth_since":    auth_info.get("since"),
         }
 
     except Exception as e:
@@ -922,6 +953,7 @@ def _run_scheduler_subprocess():
     env = os.environ.copy()
     env["TADO_SCHEDULES_DIR"] = DATA_DIR
     env["TADO_TOKEN_FILE"]    = TOKEN_FILE
+    env["TADO_CREDS_FILE"]    = CREDS_FILE
     try:
         _rotate_log()
         proc = subprocess.Popen(
@@ -970,6 +1002,158 @@ def api_run_now():
             return jsonify({"ok": True, "mode": "direct"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+# ---------------------------------------------------------------------------
+# API — CREDENTIALS
+# ---------------------------------------------------------------------------
+
+@app.route("/api/credentials", methods=["GET"])
+def api_credentials_get():
+    if not os.path.exists(CREDS_FILE):
+        return jsonify({"exists": False, "client_id": ""})
+    try:
+        with open(CREDS_FILE, encoding="utf-8") as f:
+            data = json.load(f)
+        return jsonify({"exists": True, "client_id": data.get("client_id", "")})
+    except Exception as e:
+        return jsonify({"exists": False, "error": str(e), "client_id": ""})
+
+
+@app.route("/api/credentials", methods=["POST"])
+def api_credentials_save():
+    data = request.get_json()
+    if not isinstance(data, dict):
+        return jsonify({"error": "Invalid data"}), 400
+    client_id = str(data.get("client_id", "")).strip()
+    if not client_id:
+        return jsonify({"error": "client_id is required"}), 400
+    try:
+        os.makedirs(os.path.dirname(CREDS_FILE), exist_ok=True)
+        with open(CREDS_FILE, "w", encoding="utf-8") as f:
+            json.dump({"client_id": client_id}, f, indent=2)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ---------------------------------------------------------------------------
+# API — TOKEN TEST / RENEW (device flow)
+# ---------------------------------------------------------------------------
+
+# In-memory device flow state — one flow at a time
+_device_flow: dict = {"status": "idle"}  # status: idle | pending | completed | error
+_device_flow_lock = threading.Lock()
+
+
+def _device_flow_poll(tado, client_id: str):
+    """Background thread: poll Tado until the user validates, then save token."""
+    global _device_flow, _tado_client
+    import PyTado.const as _pytado_const
+    _pytado_const.CLIENT_ID_DEVICE = client_id
+    try:
+        while True:
+            try:
+                tado.device_activation()
+                # Success — token saved to TOKEN_FILE by PyTado
+                with _device_flow_lock:
+                    _device_flow = {"status": "completed"}
+                _tado_client = None  # reset cached client so next call re-reads fresh token
+                _write_auth_status_cfg(False)
+                return
+            except Exception:
+                with _device_flow_lock:
+                    if _device_flow.get("status") != "pending":
+                        return  # cancelled
+                time.sleep(5)
+    except Exception as e:
+        with _device_flow_lock:
+            _device_flow = {"status": "error", "error": str(e)}
+        _write_auth_status_cfg(False)
+
+
+def _write_auth_status_cfg(pending: bool, url: str = ""):
+    auth_file = os.path.join(DATA_DIR, "auth_status.json")
+    try:
+        if pending and url:
+            with open(auth_file, "w", encoding="utf-8") as f:
+                json.dump({"auth_required": True, "url": url,
+                           "since": datetime.datetime.now().isoformat()}, f)
+        elif os.path.exists(auth_file):
+            os.remove(auth_file)
+    except Exception:
+        pass
+
+
+@app.route("/api/tado/test")
+def api_tado_test():
+    global _tado_client
+    _tado_client = None  # force fresh attempt
+    try:
+        tado = get_tado_client()
+        me   = tado.get_me()
+        home = me["homes"][0]["name"] if me.get("homes") else "?"
+        return jsonify({"ok": True, "home": home})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
+@app.route("/api/tado/start-device-flow", methods=["POST"])
+def api_tado_start_device_flow():
+    """Delete token, start OAuth2 device flow, return verification URL immediately."""
+    global _tado_client, _device_flow
+    _tado_client = None
+
+    # Delete existing token so PyTado starts a fresh device flow
+    if os.path.exists(TOKEN_FILE):
+        try:
+            os.remove(TOKEN_FILE)
+        except Exception as e:
+            return jsonify({"error": f"Impossible de supprimer le token: {e}"}), 500
+
+    try:
+        from PyTado.interface.interface import Tado
+        from PyTado.http import DeviceActivationStatus
+        import PyTado.const as _pytado_const
+
+        client_id = _load_client_id()
+        _pytado_const.CLIENT_ID_DEVICE = client_id
+
+        tado   = Tado(token_file_path=TOKEN_FILE)
+        status = tado.device_activation_status()
+
+        if status.value != "PENDING":
+            return jsonify({"error": f"Statut inattendu après suppression du token: {status}"}), 500
+
+        url = tado.device_verification_url()
+        # Fix missing client_id in URL (PyTado bug ≤0.19.2)
+        if url and "client_id" not in url:
+            sep = "&" if "?" in url else "?"
+            url = url + sep + f"client_id={client_id}"
+            try:
+                tado._http._device_verification_url = url
+            except Exception:
+                pass
+
+        with _device_flow_lock:
+            _device_flow = {"status": "pending", "url": url}
+
+        _write_auth_status_cfg(True, url)
+
+        threading.Thread(target=_device_flow_poll, args=(tado, client_id), daemon=True).start()
+
+        return jsonify({"ok": True, "url": url})
+
+    except Exception as e:
+        with _device_flow_lock:
+            _device_flow = {"status": "error", "error": str(e)}
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/tado/device-flow-status")
+def api_tado_device_flow_status():
+    with _device_flow_lock:
+        return jsonify(dict(_device_flow))
 
 
 # ---------------------------------------------------------------------------

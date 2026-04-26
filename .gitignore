@@ -1,5 +1,6 @@
-# Tado auth token — never commit
+# Tado auth token and credentials — never commit
 tado_refresh_token
+tado_credentials.json
 *.token
 
 # macOS

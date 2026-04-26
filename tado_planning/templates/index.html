@@ -381,6 +381,30 @@ body { font-family: var(--font); background: var(--bg); color: var(--text);
 <!-- MAIN -->
 <main class="main">
 
+  <!-- ── GLOBAL AUTH BANNER ── -->
+  <div id="global-auth-banner" style="display:none;padding:12px 24px;
+    background:#fef3c7;border-bottom:2px solid #f59e0b;flex-shrink:0;
+    display:none;align-items:center;gap:12px;flex-wrap:wrap">
+    <svg viewBox="0 0 20 20" fill="currentColor" style="width:20px;height:20px;color:#b45309;flex-shrink:0">
+      <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/>
+    </svg>
+    <div style="flex:1;min-width:200px">
+      <span style="font-weight:700;color:#92400e;font-size:13px">Tado authentication required</span>
+      <span style="color:#92400e;font-size:13px"> — scheduler is waiting.</span>
+      <span id="auth-banner-since" style="font-size:12px;color:#b45309;margin-left:6px"></span>
+    </div>
+    <a id="auth-banner-url" href="#" target="_blank"
+      style="display:none;padding:6px 14px;background:#b45309;color:#fff;border-radius:6px;
+             font-size:13px;font-weight:600;text-decoration:none;white-space:nowrap">
+      Open activation link →
+    </a>
+    <button onclick="showSection('logs')"
+      style="padding:5px 12px;background:transparent;border:1px solid #b45309;color:#92400e;
+             border-radius:6px;font-size:12px;cursor:pointer;white-space:nowrap">
+      View logs
+    </button>
+  </div>
+
   <!-- ── PLANNING (Active Status) ── -->
   <section class="section active" id="sec-status">
     <div class="section-header">
@@ -513,6 +537,63 @@ body { font-family: var(--font); background: var(--bg); color: var(--text);
           </div>
         </div>
       </div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-header">
+          <span class="card-title">Tado Credentials</span>
+          <span id="creds-status" style="font-size:12px;color:var(--muted)"></span>
+        </div>
+        <div class="card-body">
+          <div class="form-group">
+            <label class="form-label">Client ID</label>
+            <input class="form-input" id="creds-clientid"
+              placeholder="1bb50063-6b0c-4d11-bd99-387f4a91cc46"
+              style="font-family:var(--mono);font-size:12px">
+            <div class="form-hint">
+              Tado OAuth client ID (device flow).
+              Leave blank to use PyTado's built-in default.
+              Saved to <code>tado_credentials.json</code> (gitignored).
+            </div>
+          </div>
+          <div id="creds-err" style="color:var(--red);font-size:12px;margin-bottom:8px"></div>
+          <button class="btn btn-primary btn-sm" onclick="credsSave()">Save</button>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-header">
+          <span class="card-title">Tado Token</span>
+          <span id="token-status" style="font-size:12px;color:var(--muted)"></span>
+        </div>
+        <div class="card-body">
+          <div id="token-result" style="font-size:13px;margin-bottom:12px;min-height:18px"></div>
+          <!-- device-flow pending UI (hidden by default) -->
+          <div id="token-flow-panel" style="display:none;margin-bottom:12px;
+            padding:12px 14px;background:#fef3c7;border:1px solid #fcd34d;border-radius:6px">
+            <div style="font-weight:600;color:#92400e;margin-bottom:8px;font-size:13px">
+              Waiting for Tado validation…
+            </div>
+            <div style="font-size:12px;color:#92400e;margin-bottom:10px">
+              Click the link below to authorize the app in your browser, then come back here.
+            </div>
+            <a id="token-flow-url" href="#" target="_blank"
+              style="display:inline-block;padding:7px 14px;background:#b45309;color:#fff;
+                     border-radius:6px;font-size:13px;font-weight:600;text-decoration:none;
+                     margin-bottom:10px">
+              Open activation link →
+            </a>
+            <div style="font-size:11px;color:#b45309" id="token-flow-hint">
+              Polling every 5s…
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-secondary btn-sm" id="btn-token-test" onclick="tokenTest()">
+              Test connection
+            </button>
+            <button class="btn btn-danger btn-sm" id="btn-token-renew" onclick="tokenRenew()">
+              Renew token
+            </button>
+          </div>
+        </div>
+      </div>
       <div class="card">
         <div class="card-header">
           <span class="card-title">Default zone template</span>
@@ -553,10 +634,13 @@ body { font-family: var(--font); background: var(--bg); color: var(--text);
     </div>
     <div class="section-body" style="padding:0;display:flex;flex-direction:column;flex:1;min-height:0">
       <div id="log-auth-banner" style="display:none;padding:8px 20px;font-size:12px;font-weight:600;
-        color:#92400e;background:#fef3c7;border-bottom:1px solid #fcd34d;flex-shrink:0">
-        ⚠ Authentification Tado requise — auto-refresh pausé.
+        color:#92400e;background:#fef3c7;border-bottom:1px solid #fcd34d;flex-shrink:0;
+        display:none;align-items:center;gap:12px;flex-wrap:wrap">
+        ⚠ Tado authentication required — auto-refresh paused.
+        <a id="log-auth-banner-url" href="#" target="_blank" style="display:none;
+          color:#b45309;text-decoration:underline;font-weight:700">Open link →</a>
         <a href="#" onclick="resumeLogsRefresh();return false"
-          style="margin-left:8px;color:#b45309;text-decoration:underline">Reprendre</a>
+          style="margin-left:8px;color:#b45309;text-decoration:underline;font-weight:normal">Resume</a>
       </div>
       <div id="log-meta" style="padding:8px 20px;font-size:11px;color:var(--muted);
         border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0"></div>
@@ -833,6 +917,30 @@ async function loadStatus() {
     const loop = loopRes.status  === 'fulfilled' ? loopRes.value.data  : {running: false};
     if (d.error) { el.innerHTML = `<div class="alert alert-error">${d.error}</div>`; return; }
     if (tl.error) { el.innerHTML = `<div class="alert alert-error">${tl.error}</div>`; return; }
+
+    // ── Global auth banner ──
+    {
+      const banner = document.getElementById("global-auth-banner");
+      if (d.auth_required) {
+        banner.style.display = "flex";
+        const sinceEl = document.getElementById("auth-banner-since");
+        if (d.auth_since) {
+          try {
+            const dt = new Date(d.auth_since);
+            sinceEl.textContent = `(since ${dt.toLocaleTimeString()})`;
+          } catch(_) { sinceEl.textContent = ""; }
+        }
+        const urlEl = document.getElementById("auth-banner-url");
+        if (d.auth_url) {
+          urlEl.href = d.auth_url;
+          urlEl.style.display = "";
+        } else {
+          urlEl.style.display = "none";
+        }
+      } else {
+        banner.style.display = "none";
+      }
+    }
 
     let html = '';
 
@@ -2025,15 +2133,133 @@ let _dzData = null;  // the default_zone cfg object being edited
 
 async function loadSettings() {
   try {
-    const { data } = await api("GET", "/settings");
-    _settingsData = data;
-    document.getElementById("set-loop-interval").value = data.loop_interval ?? 60;
+    const [settingsRes, credsRes] = await Promise.allSettled([
+      api("GET", "/settings"),
+      api("GET", "/credentials"),
+    ]);
 
-    _dzData = data.default_zone
-      ? JSON.parse(JSON.stringify(data.default_zone))
-      : { away_temp: 15, away_enabled: true, preheat: "ECO", early_start: false };
-    settingsDzRender();
+    if (settingsRes.status === 'fulfilled') {
+      _settingsData = settingsRes.value.data;
+      document.getElementById("set-loop-interval").value = _settingsData.loop_interval ?? 60;
+      _dzData = _settingsData.default_zone
+        ? JSON.parse(JSON.stringify(_settingsData.default_zone))
+        : { away_temp: 15, away_enabled: true, preheat: "ECO", early_start: false };
+      settingsDzRender();
+    }
+
+    if (credsRes.status === 'fulfilled') {
+      const c = credsRes.value.data;
+      document.getElementById("creds-clientid").value = c.client_id || "";
+      document.getElementById("creds-status").textContent = c.exists ? "✓ saved" : "not configured";
+      document.getElementById("creds-status").style.color = c.exists ? "var(--green)" : "var(--muted)";
+    }
+    // Token presence hint (no API call yet — just show file exists or not via status)
+    const tokenStatusEl = document.getElementById("token-status");
+    if (tokenStatusEl) {
+      tokenStatusEl.textContent = "click Test to verify";
+      tokenStatusEl.style.color = "var(--muted)";
+    }
   } catch(e) { toast(e.message, "err"); }
+}
+
+async function credsSave() {
+  document.getElementById("creds-err").textContent = "";
+  const client_id = document.getElementById("creds-clientid").value.trim();
+  if (!client_id) {
+    document.getElementById("creds-err").textContent = "Client ID is required.";
+    return;
+  }
+  try {
+    await api("POST", "/credentials", { client_id });
+    document.getElementById("creds-status").textContent = "✓ saved";
+    document.getElementById("creds-status").style.color = "var(--green)";
+    toast("Credentials saved");
+  } catch(e) {
+    document.getElementById("creds-err").textContent = e.message;
+  }
+}
+
+async function tokenTest() {
+  const btn = document.getElementById("btn-token-test");
+  const res = document.getElementById("token-result");
+  btn.disabled = true;
+  btn.textContent = "Test en cours…";
+  res.textContent = "";
+  try {
+    const { data } = await api("GET", "/tado/test");
+    if (data.ok) {
+      res.innerHTML = `<span style="color:var(--green);font-weight:600;">✓ Connecté</span>
+        <span style="color:var(--muted)"> — home : <strong>${data.home}</strong></span>`;
+      document.getElementById("token-status").textContent = "✓ valid";
+      document.getElementById("token-status").style.color = "var(--green)";
+    } else {
+      res.innerHTML = `<span style="color:var(--red);font-weight:600;">✗ Failed</span>
+        <span style="color:var(--muted)"> — ${data.error}</span>`;
+      document.getElementById("token-status").textContent = "invalid";
+      document.getElementById("token-status").style.color = "var(--red)";
+    }
+  } catch(e) {
+    res.innerHTML = `<span style="color:var(--red);">Erreur : ${e.message}</span>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Tester la connexion";
+  }
+}
+
+let _deviceFlowPoller = null;
+
+async function tokenRenew() {
+  if (!confirm("Delete the Tado token and start the re-authentication flow?")) return;
+  const btn    = document.getElementById("btn-token-renew");
+  const res    = document.getElementById("token-result");
+  const panel  = document.getElementById("token-flow-panel");
+  const hint   = document.getElementById("token-flow-hint");
+  btn.disabled = true;
+  btn.textContent = "Starting…";
+  res.innerHTML = `<span style="color:var(--muted);font-size:12px;">Contacting Tado…</span>`;
+  panel.style.display = "none";
+  try {
+    const { data } = await api("POST", "/tado/start-device-flow");
+    if (!data.ok) throw new Error(data.error || "Erreur device flow");
+
+    // Show the activation link inline
+    document.getElementById("token-flow-url").href = data.url;
+    panel.style.display = "block";
+    document.getElementById("token-status").textContent = "pending";
+    document.getElementById("token-status").style.color = "var(--orange)";
+
+    // Open the URL automatically
+    window.open(data.url, "_blank");
+
+    // Poll device flow status every 5s
+    if (_deviceFlowPoller) clearInterval(_deviceFlowPoller);
+    _deviceFlowPoller = setInterval(async () => {
+      try {
+        const { data: st } = await api("GET", "/tado/device-flow-status");
+        if (st.status === "completed") {
+          clearInterval(_deviceFlowPoller); _deviceFlowPoller = null;
+          panel.style.display = "none";
+          res.innerHTML = `<span style="color:var(--green);font-weight:600;">✓ Token renewed successfully!</span>`;
+          document.getElementById("token-status").textContent = "✓ valid";
+          document.getElementById("token-status").style.color = "var(--green)";
+          loadStatus(); // hide auth banner
+        } else if (st.status === "error") {
+          clearInterval(_deviceFlowPoller); _deviceFlowPoller = null;
+          hint.textContent = `Erreur : ${st.error}`;
+          hint.style.color = "var(--red)";
+        } else {
+          hint.textContent = `Polling… (${new Date().toLocaleTimeString()})`;
+        }
+      } catch(_) {}
+    }, 5000);
+
+  } catch(e) {
+    panel.style.display = "none";
+    res.innerHTML = `<span style="color:var(--red);">Error: ${e.message}</span>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Renew token";
+  }
 }
 
 function settingsDzClear() {
@@ -2209,7 +2435,15 @@ async function loadLogs() {
         _logAuthPaused = true;
         _stopLogsAutoRefresh();
         document.getElementById("log-autoscroll").checked = false;
-        banner.style.display = "";
+        banner.style.display = "flex";
+      }
+      // Populate the URL link in the log banner
+      const urlLine = data.lines.slice().reverse().find(l => /\[AUTH\] URL: https?:\/\//.test(l));
+      const urlMatch = urlLine && urlLine.match(/\[AUTH\] URL: (https?:\/\/\S+)/);
+      const logBannerUrl = document.getElementById("log-auth-banner-url");
+      if (urlMatch && logBannerUrl) {
+        logBannerUrl.href = urlMatch[1];
+        logBannerUrl.style.display = "";
       }
     } else if (hasAuthSuccess && _logAuthPaused) {
       // Auth resolved — resume
@@ -2309,7 +2543,7 @@ async function loadTadoState() {
     if (data.error) {
       const isAuth = /timed out|token|auth/i.test(data.error);
       el.innerHTML = `<div class="alert alert-error">${data.error}${isAuth
-        ? `<div style="margin-top:6px;font-size:12px">⚠ Authentification Tado en attente — ouvrez l'onglet <b>Logs</b> pour valider.</div>` : ''}</div>`;
+        ? `<div style="margin-top:6px;font-size:12px">⚠ Tado authentication pending — open the <b>Logs</b> tab to validate.</div>` : ''}</div>`;
       return;
     }
     const zones = data.zones || {};
@@ -2410,7 +2644,7 @@ async function loadAnalysis() {
     if (tadoRes.data.error) {
       const isAuth = /timed out|token|auth/i.test(tadoRes.data.error);
       el.innerHTML = `<div class="alert alert-error">Tado: ${tadoRes.data.error}${isAuth
-        ? `<div style="margin-top:6px;font-size:12px">⚠ Authentification Tado en attente — ouvrez l'onglet <b>Logs</b> pour valider.</div>` : ''}</div>`;
+        ? `<div style="margin-top:6px;font-size:12px">⚠ Tado authentication pending — open the <b>Logs</b> tab to validate.</div>` : ''}</div>`;
       return;
     }
     if (simRes.data.error)  { el.innerHTML = `<div class="alert alert-error">Simulate: ${simRes.data.error}</div>`; return; }
@@ -2707,6 +2941,9 @@ async function addonSaveVerbosity(btn) {
   ]);
   loadContext();
 })();
+
+// Background poll every 60s — keeps auth banner up to date on any section
+setInterval(() => loadStatus(), 60000);
 
 // ─────────────────────────────────────────────────────────────────────────
 // CONTEXT & SERVICE
