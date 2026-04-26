@@ -154,6 +154,7 @@ case "$CONTEXT" in
         PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
         SCHEDULES_DIR="$PROJECT_DIR/schedules"
         TOKEN_FILE="$PROJECT_DIR/tado_refresh_token"
+        CREDS_FILE="$PROJECT_DIR/tado_credentials.json"
         PYTHON=$(which python3.11 2>/dev/null || which python3)
         PLANNING_SCRIPT="$SCRIPT_DIR/tado-planning-run.py"
         CFG_SCRIPT="$SCRIPT_DIR/tado-planning-cfg.py"
@@ -168,6 +169,7 @@ case "$CONTEXT" in
         PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
         SCHEDULES_DIR="/config/tado-planning/schedules"
         TOKEN_FILE="/config/tado-planning/tado_refresh_token"
+        CREDS_FILE="/config/tado-planning/tado_credentials.json"
         CFG_PORT="${CFG_PORT:-8099}"
         CFG_HOST="0.0.0.0"
         VERBOSITY=0
@@ -198,6 +200,7 @@ case "$CONTEXT" in
         VERBOSITY=$(jq -r '.verbosity // 0' /data/options.json 2>/dev/null || echo "0")
         SCHEDULES_DIR="/config/tado-planning/schedules"
         TOKEN_FILE="/config/tado-planning/tado_refresh_token"
+        CREDS_FILE="/config/tado-planning/tado_credentials.json"
         PYTHON="python3"
         PLANNING_SCRIPT="/tado-planning-run.py"
         CFG_SCRIPT="/tado-planning-cfg.py"
@@ -352,6 +355,7 @@ if [ "$LOOP" = true ]; then
     TADO_CONTEXT="$CONTEXT" \
     TADO_SCHEDULES_DIR="$SCHEDULES_DIR" \
     TADO_TOKEN_FILE="$TOKEN_FILE" \
+    TADO_CREDS_FILE="$CREDS_FILE" \
     $PYTHON "$CFG_SCRIPT" --host "$CFG_HOST" --port "$CFG_PORT" --no-browser &
     CFG_PID=$!
 
@@ -364,6 +368,7 @@ if [ "$LOOP" = true ]; then
         log_run_header "loop (interval=${LOOP_INTERVAL_MIN}min)"
         TADO_SCHEDULES_DIR="$SCHEDULES_DIR" \
         TADO_TOKEN_FILE="$TOKEN_FILE" \
+        TADO_CREDS_FILE="$CREDS_FILE" \
         $PYTHON "$PLANNING_SCRIPT" ${PYTHON_ARGS[@]+"${PYTHON_ARGS[@]}"} 2>&1 \
             | tee_log || true
         # Re-read interval after run (may have changed via settings)
@@ -400,6 +405,7 @@ elif [ "$RUN_CFG" = true ]; then
     TADO_CONTEXT="$CONTEXT" \
     TADO_SCHEDULES_DIR="$SCHEDULES_DIR" \
     TADO_TOKEN_FILE="$TOKEN_FILE" \
+    TADO_CREDS_FILE="$CREDS_FILE" \
     $PYTHON "$CFG_SCRIPT" --host "$CFG_HOST" --port "$CFG_PORT" \
         $( [ "$CONTEXT" != "mac-shell" ] && echo "--no-browser" )
 
@@ -413,6 +419,7 @@ else
     log_run_header "run"
     TADO_SCHEDULES_DIR="$SCHEDULES_DIR" \
     TADO_TOKEN_FILE="$TOKEN_FILE" \
+    TADO_CREDS_FILE="$CREDS_FILE" \
     $PYTHON "$PLANNING_SCRIPT" ${PYTHON_ARGS[@]+"${PYTHON_ARGS[@]}"} 2>&1 | tee -a "$LOG_FILE"
 
 fi
