@@ -1957,6 +1957,24 @@ document.addEventListener('click', e => {
   }
 });
 
+// Tab navigation through slots-table cells (start + temp inputs)
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Tab') return;
+  const input = e.target;
+  if (!input.matches('.slots-table td input')) return;
+  const pane = input.closest('[id^="zone-pane-"]');
+  if (!pane) return;
+  const inputs = Array.from(pane.querySelectorAll('.slots-table td input'));
+  const idx = inputs.indexOf(input);
+  if (idx === -1) return;
+  e.preventDefault();
+  const next = e.shiftKey
+    ? inputs[(idx - 1 + inputs.length) % inputs.length]
+    : inputs[(idx + 1) % inputs.length];
+  next.focus();
+  next.select();
+});
+
 function plSetField(field, value) {
   state.plData[field] = value;
 }
