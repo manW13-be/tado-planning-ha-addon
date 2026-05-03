@@ -193,6 +193,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text);
 .slot-del { background: none; border: none; cursor: pointer; color: var(--muted);
             padding: 2px 4px; border-radius: 4px; font-size: 14px; }
 .slot-del:hover { background: #fee2e2; color: var(--red); }
+.slots-table tr.slot-now td { color: var(--accent); font-weight: 700; }
 
 /* ── EVENTS TABLE ── */
 .events-table { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -2605,10 +2606,17 @@ function _tadoZoneCard(zname, zcfg) {
             <th style="padding-left:0;width:50%">Start</th>
             <th style="padding-left:0;width:50%">Temp °C</th>
           </tr>
-          ${(zcfg[k]||[]).map(s=>`<tr>
-            <td style="padding:3px 0;font-family:var(--mono);font-size:12px">${s.start}</td>
-            <td style="padding:3px 0;font-family:var(--mono);font-size:12px">${s.temp != null ? s.temp+'°C' : '—'}</td>
-          </tr>`).join('')}
+          ${(()=>{
+            const nowMins = new Date().getHours()*60+new Date().getMinutes();
+            const toMins = t => { const [h,m]=(t||'00:00').split(':').map(Number); return h*60+m; };
+            const slots = zcfg[k]||[];
+            let activeSlot = -1;
+            for(let j=0;j<slots.length;j++) if(toMins(slots[j].start)<=nowMins) activeSlot=j;
+            return slots.map((s,j)=>`<tr${j===activeSlot?' class="slot-now"':''}>
+              <td style="padding:3px 0;font-family:var(--mono);font-size:12px">${s.start}</td>
+              <td style="padding:3px 0;font-family:var(--mono);font-size:12px">${s.temp != null ? s.temp+'°C' : '—'}</td>
+            </tr>`).join('');
+          })()}
         </table>
       </div>`).join('');
   }
